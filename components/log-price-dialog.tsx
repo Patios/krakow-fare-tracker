@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { AIRLINE_LABEL } from "@/lib/airports";
 import { isIsoDate, parseAmount, todayIso } from "@/lib/format";
 import type { Airline } from "@/lib/types";
@@ -83,8 +84,8 @@ export function LogPriceDialog({
           </DialogHeader>
 
           {onlyAirline ? (
-            <p className="text-sm">
-              Linia: <span className="font-medium">{AIRLINE_LABEL[onlyAirline]}</span>
+            <p className="flex items-center gap-2 text-sm">
+              Linia: <AirlineChip airline={onlyAirline} />
             </p>
           ) : (
             <div className="grid gap-1.5">
@@ -102,6 +103,7 @@ export function LogPriceDialog({
                 <SelectContent>
                   {items.map((item) => (
                     <SelectItem key={item.value} value={item.value}>
+                      <AirlineMark airline={item.value} className="size-5" />
                       {item.label}
                     </SelectItem>
                   ))}

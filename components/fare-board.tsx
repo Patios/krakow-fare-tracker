@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
+import { AirlineMark } from "@/components/airline-mark";
 import { AddRouteDialog } from "@/components/add-route-dialog";
 import { LogPriceDialog } from "@/components/log-price-dialog";
 import { RouteCard } from "@/components/route-card";
@@ -69,24 +70,36 @@ export function FareBoard() {
     <div className="relative flex flex-1 flex-col">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(900px_420px_at_0%_-10%,oklch(0.9_0.05_55/0.65),transparent_55%),radial-gradient(700px_380px_at_100%_0%,oklch(0.92_0.04_160/0.45),transparent_50%)]"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(880px_380px_at_-8%_-10%,rgb(255_209_0/0.42),transparent_58%),radial-gradient(720px_420px_at_108%_-6%,rgb(198_0_126/0.2),transparent_52%)]"
       />
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
-        <header className="flex flex-col gap-5 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
+      <header className="bg-ryanair text-white">
+        <div className="flex h-1.5" aria-hidden>
+          <div className="flex-1 bg-ryanair-yellow" />
+          <div className="flex-1 bg-wizz" />
+        </div>
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-6 sm:flex-row sm:items-end sm:justify-between sm:px-6 sm:py-8">
           <div className="max-w-2xl">
-            <p className="font-heading text-sm tracking-[0.18em] text-primary uppercase">KRK · Balice</p>
-            <h1 className="mt-2 font-heading text-4xl leading-none font-medium sm:text-5xl">
+            <div className="flex items-center gap-2">
+              <AirlineMark airline="ryanair" />
+              <AirlineMark airline="wizzair" />
+              <p className="font-heading text-sm font-semibold tracking-[0.18em] text-ryanair-yellow uppercase">
+                KRK · Balice
+              </p>
+            </div>
+            <h1 className="mt-3 font-heading text-4xl leading-none font-bold tracking-wide uppercase sm:text-5xl">
               Tanie loty z Krakowa
             </h1>
-            <p className="mt-3 max-w-xl text-base text-muted-foreground">
+            <p className="mt-3 max-w-xl text-base text-white/75">
               Ryanair i Wizz Air. Start zawsze z KRK. Ceny zapisujesz sam — historia zostaje w tej
               przeglądarce.
             </p>
           </div>
-          <Button type="button" className="h-10" onClick={openAdd} disabled={!ready}>
+          <Button type="button" className="h-10 font-semibold" onClick={openAdd} disabled={!ready}>
             Dodaj trasę
           </Button>
-        </header>
+        </div>
+      </header>
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
 
         {saveError ? (
           <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -271,8 +284,10 @@ function LoadingState() {
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
     <section className="rounded-2xl bg-card px-5 py-10 text-center ring-1 ring-foreground/10">
-      <div className="mx-auto mb-4 flex h-16 w-28 items-center justify-center rounded-lg border border-dashed border-primary/40 font-heading text-lg text-primary">
-        KRK
+      <div className="mb-4 flex items-center justify-center gap-3">
+        <AirlineMark airline="ryanair" className="size-11" />
+        <span className="font-heading text-3xl font-bold tracking-wide text-ryanair">KRK</span>
+        <AirlineMark airline="wizzair" className="size-11" />
       </div>
       <h2 className="font-heading text-2xl font-medium">Nie obserwujesz jeszcze żadnej trasy</h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
