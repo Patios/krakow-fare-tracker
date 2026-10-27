@@ -21,15 +21,17 @@ import type { SearchTrip, WatchedRoute } from "@/lib/types";
 export function AddRouteDialog({
   open,
   routes,
+  initialDestinationIata,
   onOpenChange,
   onAdd,
 }: {
   open: boolean;
   routes: WatchedRoute[];
+  initialDestinationIata?: string;
   onOpenChange: (open: boolean) => void;
   onAdd: (trip: SearchTrip & { destinationIata: string }) => boolean;
 }) {
-  const [destinationIata, setDestinationIata] = useState("");
+  const [destinationIata, setDestinationIata] = useState(initialDestinationIata ?? "");
   const [mode, setMode] = useState<"day" | "range">("day");
   const [outboundFrom, setOutboundFrom] = useState("");
   const [outboundTo, setOutboundTo] = useState("");

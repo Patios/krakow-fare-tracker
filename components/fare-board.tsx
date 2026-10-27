@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { MapPinned } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
@@ -36,6 +36,8 @@ export function FareBoard() {
   const view = interpretSnapshot(snapshot);
   const [addOpen, setAddOpen] = useState(false);
   const [addKey, setAddKey] = useState(0);
+  const [addDestinationIata, setAddDestinationIata] = useState<string | undefined>();
+  const handledMapDestination = useRef(false);
   const [logRouteId, setLogRouteId] = useState<string | null>(null);
   const [logKey, setLogKey] = useState(0);
   const [check, setCheck] = useState<{
@@ -73,10 +75,20 @@ export function FareBoard() {
     }
   }
 
-  function openAdd() {
+  function openAdd(destinationIata?: string) {
+    setAddDestinationIata(destinationIata);
     setAddKey((value) => value + 1);
     setAddOpen(true);
   }
+
+  useEffect(() => {
+    if (!ready || handledMapDestination.current) return;
+    handledMapDestination.current = true;
+    const destinationIata = new URLSearchParams(window.location.search).get("destination")?.toUpperCase();
+    if (!destinationIata || !destinationByIata.has(destinationIata)) return;
+    openAdd(destinationIata);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [ready]);
 
   return (
     <div className="relative flex flex-1 flex-col">
@@ -192,7 +204,11 @@ export function FareBoard() {
           key={addKey}
           open={addOpen}
           routes={ready.routes}
-          onOpenChange={setAddOpen}
+          initialDestinationIata={addDestinationIata}
+          onOpenChange={(open) => {
+            setAddOpen(open);
+            if (!open) setAddDestinationIata(undefined);
+          }}
           onAdd={(trip) =>
             commit({
               routes: [

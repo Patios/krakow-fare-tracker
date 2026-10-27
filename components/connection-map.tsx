@@ -85,7 +85,8 @@ export function ConnectionMap() {
           <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-label="Lista miast docelowych">
             {visibleRoutes.map((route) => (
               <li key={route.iata}>
-                <div
+                <Link
+                  href={`/?destination=${route.iata}`}
                   className={`flex min-h-11 items-center justify-between gap-3 rounded-lg border px-3 py-2 transition-colors ${activeRouteIata === route.iata ? "border-ryanair-yellow bg-white/15" : "border-white/10 bg-white/5"}`}
                   onMouseEnter={() => setActiveRouteIata(route.iata)}
                   onMouseLeave={() => setActiveRouteIata(null)}
@@ -94,7 +95,7 @@ export function ConnectionMap() {
                   <span className="flex shrink-0 gap-1" aria-label={route.airlines.map((airline) => AIRLINE_LABEL[airline]).join(" i ")}>
                     {route.airlines.filter((airline) => enabledAirlines.includes(airline)).map((airline) => <span key={airline} className="size-2.5 rounded-full" style={{ backgroundColor: color[airline] }} />)}
                   </span>
-                </div>
+                </Link>
               </li>
             ))}
           </ul>
@@ -146,6 +147,7 @@ function RouteLine({
   const stroke = hasBoth ? "url(#both-airlines)" : color[visibleAirlines[0]];
   const path = `M ${krakowPoint.x} ${krakowPoint.y} Q ${(krakowPoint.x + route.x) / 2} ${Math.min(krakowPoint.y, route.y) - 3} ${route.x} ${route.y}`;
   return (
+    <a href={`/?destination=${route.iata}`} aria-label={`Dodaj trasę do miasta ${route.city}`}>
     <g onMouseEnter={() => onHover(route.iata)} onMouseLeave={() => onHover(null)} className="cursor-pointer">
       <path d={path} fill="none" stroke="transparent" strokeWidth="2.5" />
       <path d={path} fill="none" stroke={stroke} strokeWidth={highlighted ? ".7" : ".28"} strokeOpacity={dimmed ? ".12" : highlighted ? "1" : ".7"} className="transition-all duration-150" />
@@ -154,5 +156,6 @@ function RouteLine({
       </g>
       {highlighted ? <text x={route.x + 1.4} y={route.y - 1.2} fill="white" fontSize="1.9" fontWeight="700" paintOrder="stroke" stroke="#061936" strokeWidth=".8">{route.city}</text> : null}
     </g>
+    </a>
   );
 }
