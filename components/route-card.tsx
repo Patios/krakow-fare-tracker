@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { RefreshCw } from "lucide-react";
+import { formatAutoFlights } from "@/lib/fare-refresh";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { FlightDayCheck } from "@/components/flight-day-check";
 import { AIRLINE_LABEL, destinationByIata } from "@/lib/airports";
@@ -23,12 +25,18 @@ export function RouteCard({
   onCheck,
   onDeleteRoute,
   onDeleteLog,
+  refreshing,
+  refreshNote,
+  onRefresh,
 }: {
   id?: string;
   route: WatchedRoute;
   logs: PriceLog[];
   onLogPrice: () => void;
   onEdit: () => void;
+  refreshing: boolean;
+  refreshNote: string | null;
+  onRefresh: () => void;
   onCheck: (check: { airline: Airline; href: string; blocked: boolean }) => void;
   onDeleteRoute: () => void;
   onDeleteLog: (logId: string) => void;
@@ -51,6 +59,7 @@ export function RouteCard({
     : null;
   const sharedClocks = !airlineOffers || !airlineOffers.some((offer) => offer.log && formatFlightTimes(offer.log));
   const past = route.outboundFrom < todayIso();
+  const servedByRyanair = destination?.airlines.includes("ryanair") ?? false;
   const rangeNote = destination?.airlines.includes("wizzair") ? wizzRangeNote(route) : null;
   const trip = {
     outboundFrom: route.outboundFrom,
@@ -131,7 +140,7 @@ export function RouteCard({
             {airlineOffers.map((offer) => {
               const times = offer.log ? formatFlightTimes(offer.log) : null;
               return (
-                <li key={offer.airline} className="grid gap-1">
+                <li key={offer.airline} className="grid content-start gap-1">
                   <p className="flex items-center gap-1.5 text-sm font-medium">
                     <AirlineMark airline={offer.airline} className="size-5" />
                     {AIRLINE_LABEL[offer.airline]}
@@ -145,16 +154,25 @@ export function RouteCard({
                         {formatDate(offer.log.checkedOn)}
                         {times ? ` · ${times}` : ""}
                       </p>
+                      <AutoSource log={offer.log} />
                     </>
                   ) : (
-                    <p className="text-sm text-muted-foreground">Brak zapisanej ceny. Po sprawdzeniu u linii wpisz kwotę.</p>
+                    <p className="text-sm text-muted-foreground">
+                      {offer.airline === "ryanair"
+                        ? "Brak zapisanej ceny. Pobierz ją przyciskiem „Odśwież cenę”."
+                        : "Brak zapisanej ceny. Po sprawdzeniu u linii wpisz kwotę."}
+                    </p>
                   )}
                 </li>
               );
             })}
           </ul>
         ) : lowest == null || !latest ? (
-          <p className="text-sm text-muted-foreground">Brak zapisanej ceny. Po sprawdzeniu u linii wpisz kwotę.</p>
+          <p className="text-sm text-muted-foreground">
+            {servedByRyanair
+              ? "Brak zapisanej ceny. Pobierz ją przyciskiem „Odśwież cenę” albo wpisz kwotę."
+              : "Brak zapisanej ceny. Po sprawdzeniu u linii wpisz kwotę."}
+          </p>
         ) : (
           <div>
             <p className="text-xs tracking-wide text-muted-foreground uppercase">Najniższa zapisana</p>
@@ -167,6 +185,7 @@ export function RouteCard({
                 {formatFlightTimes(latest) ? ` · ${formatFlightTimes(latest)}` : ""}
               </span>
             </p>
+            <AutoSource log={latest} />
           </div>
         )}
         {drop ? (
@@ -182,6 +201,11 @@ export function RouteCard({
           </p>
         ) : null}
         {rangeNote ? <p className="text-sm text-muted-foreground">{rangeNote}</p> : null}
+        {refreshNote ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            {refreshNote}
+          </p>
+        ) : null}
       </CardContent>
 
       <CardFooter className="flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap">
@@ -204,6 +228,12 @@ export function RouteCard({
             Sprawdź dziś · {link.label}
           </Button>
         ))}
+        {servedByRyanair ? (
+          <Button type="button" variant="outline" className="h-10" onClick={onRefresh} disabled={refreshing}>
+            <RefreshCw className={refreshing ? "animate-spin" : undefined} />
+            {refreshing ? "Pobieram…" : "Odśwież cenę"}
+          </Button>
+        ) : null}
         <Button type="button" variant="outline" className="h-10" onClick={onEdit}>
           Edytuj
         </Button>
@@ -238,6 +268,7 @@ export function RouteCard({
                         {formatFlightTimes(entry) ? ` · ${formatFlightTimes(entry)}` : ""}
                       </span>
                     </span>
+                    <AutoSource log={entry} />
                   </span>
                   {pendingLogId === entry.id ? (
                     <span className="flex gap-2">
@@ -260,6 +291,16 @@ export function RouteCard({
         </div>
       ) : null}
     </Card>
+  );
+}
+
+function AutoSource({ log }: { log: PriceLog }) {
+  if (!log.autoFlights) return null;
+  const flights = formatAutoFlights(log.autoFlights);
+  return (
+    <span className="mt-0.5 block text-xs text-muted-foreground">
+      Pobrane z Ryanair{flights ? ` · ${flights}` : ""}
+    </span>
   );
 }
 

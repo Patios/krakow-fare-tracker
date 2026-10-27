@@ -45,9 +45,9 @@ export type FlightDayTrip = {
   returnDate: string | null;
 };
 
-type FlightFetch = (input: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+export type FlightFetch = (input: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 
-type ReadResult =
+export type ReadResult =
   | { ok: true; payload: unknown }
   | { ok: false; reason: FlightReadFailure };
 
@@ -78,14 +78,18 @@ export function datesToCheck(from: string, to: string | null): { dates: string[]
 }
 
 export function ryanairDayUrl(origin: string, destination: string, date: string): string | null {
+  return ryanairFaresUrl(origin, destination, date, date);
+}
+
+export function ryanairFaresUrl(origin: string, destination: string, fromDate: string, toDate: string): string | null {
   const from = airportCode(origin);
   const to = airportCode(destination);
-  if (!from || !to || !isIsoDate(date)) return null;
+  if (!from || !to || !isIsoDate(fromDate) || !isIsoDate(toDate) || toDate < fromDate) return null;
   const params = new URLSearchParams({
     departureAirportIataCode: from,
     arrivalAirportIataCode: to,
-    outboundDepartureDateFrom: date,
-    outboundDepartureDateTo: date,
+    outboundDepartureDateFrom: fromDate,
+    outboundDepartureDateTo: toDate,
     currency: "PLN",
   });
   return `https://www.ryanair.com/api/farfnd/v4/oneWayFares?${params.toString()}`;
@@ -234,7 +238,7 @@ function unavailableDays(dates: string[]): FlightDay[] {
   return dates.map((date) => ({ date, status: "unavailable", flights: [] }));
 }
 
-async function readJson(url: string, fetchImpl: FlightFetch, signal?: AbortSignal): Promise<ReadResult> {
+export async function readJson(url: string, fetchImpl: FlightFetch, signal?: AbortSignal): Promise<ReadResult> {
   try {
     const response = await fetchImpl(url, { signal });
     if (!response.ok) return { ok: false, reason: "http" };

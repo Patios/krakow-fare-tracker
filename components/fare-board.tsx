@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { MapPinned } from "lucide-react";
+import { MapPinned, RefreshCw } from "lucide-react";
 import { AccountDialog } from "@/components/account-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AirlineMark } from "@/components/airline-mark";
@@ -31,7 +31,8 @@ import {
   startCloudSync,
   subscribeCloud,
 } from "@/lib/cloud";
-import { formatPln } from "@/lib/format";
+import { refreshRyanairPrice, type RefreshOutcome } from "@/lib/fare-refresh";
+import { formatPln, todayIso } from "@/lib/format";
 import { lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "@/lib/routes";
 import {
   clearStore,
@@ -82,6 +83,9 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const [query, setQuery] = useState("");
   const [airlines, setAirlines] = useState<Airline[]>(["ryanair", "wizzair"]);
   const [dropsOnly, setDropsOnly] = useState(false);
+  const [refreshing, setRefreshing] = useState<ReadonlySet<string>>(new Set());
+  const [refreshNotes, setRefreshNotes] = useState<Record<string, string>>({});
+  const [refreshSummary, setRefreshSummary] = useState<string | null>(null);
 
   const ready = view.status === "ready" ? view.data : null;
   const sorted = ready ? sortRoutes(ready.routes, ready.logs) : [];
@@ -99,6 +103,10 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const checkDestination = checkRoute ? destinationByIata.get(checkRoute.destinationIata) : undefined;
   const deleteRoute = ready?.routes.find((route) => route.id === deleteRouteId) ?? null;
   const editRoute = ready?.routes.find((route) => route.id === editRouteId) ?? null;
+  const ryanairRouteIds = filtered
+    .filter((route) => destinationByIata.get(route.destinationIata)?.airlines.includes("ryanair"))
+    .map((route) => route.id);
+  const refreshingAll = ryanairRouteIds.length > 0 && ryanairRouteIds.every((id) => refreshing.has(id));
 
   useEffect(() => startCloudSync(), []);
 
@@ -119,6 +127,64 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
       setSaveError("Nie udało się zapisać w tej przeglądarce.");
       return false;
     }
+  }
+
+  async function refreshPrices(routeIds: string[]) {
+    const queue = routeIds.filter((id) => !refreshing.has(id));
+    if (queue.length === 0) return;
+    setRefreshing((current) => new Set([...current, ...queue]));
+    setRefreshNotes((current) => {
+      const next = { ...current };
+      for (const id of queue) delete next[id];
+      return next;
+    });
+    if (queue.length > 1) setRefreshSummary(null);
+
+    const today = todayIso();
+    const tally = { saved: 0, unchanged: 0, noFare: 0, past: 0, failed: 0 };
+    const pending = [...queue];
+
+    async function worker() {
+      for (let id = pending.shift(); id != null; id = pending.shift()) {
+        const latest = interpretSnapshot(getSnapshot());
+        const route = latest.status === "ready" ? latest.data.routes.find((item) => item.id === id) : undefined;
+        if (!route || latest.status !== "ready") continue;
+        let note: string;
+        try {
+          const outcome = await refreshRyanairPrice(route, latest.data.logs, today);
+          note = refreshNote(outcome);
+          if (outcome.status === "saved") {
+            const current = interpretSnapshot(getSnapshot());
+            if (current.status === "ready" && current.data.routes.some((item) => item.id === id)) {
+              const next = { routes: current.data.routes, logs: [outcome.log, ...current.data.logs] };
+              try {
+                saveStore(next);
+                queuePersist(current.data, next);
+                tally.saved += 1;
+              } catch {
+                note = "Nie udało się zapisać ceny w tej przeglądarce.";
+                tally.failed += 1;
+              }
+            }
+          } else if (outcome.status === "unchanged") tally.unchanged += 1;
+          else if (outcome.status === "no-fare") tally.noFare += 1;
+          else if (outcome.status === "past") tally.past += 1;
+          else if (outcome.status === "failed") tally.failed += 1;
+        } catch {
+          note = "Nie udało się pobrać ceny z Ryanair.";
+          tally.failed += 1;
+        }
+        setRefreshNotes((current) => ({ ...current, [id]: note }));
+        setRefreshing((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
+      }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(3, queue.length) }, worker));
+    if (queue.length > 1) setRefreshSummary(refreshSummaryText(tally));
   }
 
   function openAdd(destinationIata?: string) {
@@ -161,7 +227,8 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
               Tanie loty z Krakowa
             </h1>
             <p className="mt-3 max-w-xl text-base text-white/75">
-              Ryanair i Wizz Air. Start zawsze z KRK. Ceny zapisujesz sam.{" "}
+              Ryanair i Wizz Air. Start zawsze z KRK. Ceny Ryanair pobierasz przyciskiem, Wizz Air wpisujesz
+              sam.{" "}
               {signedIn
                 ? "Historia jest na Twoim koncie Supabase."
                 : "Bez logowania historia zostaje w tej przeglądarce."}
@@ -234,6 +301,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                 Żadna zapisana trasa nie pasuje do filtra.
               </p>
             ) : (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <p className="text-sm text-muted-foreground">
                 {filterActive
                   ? `${filtered.length} z ${ready.routes.length} ${routeWord(ready.routes.length)}`
@@ -242,7 +310,25 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                 {drops > 0 ? ` · ${drops} ${drops === 1 ? "obniżka" : "obniżki"}` : ""}. Najnowsza trasa jest na
                 górze, dalej od najniższej ceny. Pozostałe bez wpisu są na końcu.
               </p>
+              {ryanairRouteIds.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0"
+                  disabled={refreshingAll}
+                  onClick={() => void refreshPrices(ryanairRouteIds)}
+                >
+                  <RefreshCw className={refreshingAll ? "animate-spin" : undefined} />
+                  {refreshingAll ? "Pobieram ceny…" : "Odśwież ceny Ryanair"}
+                </Button>
+              ) : null}
+              </div>
             )}
+            {refreshSummary ? (
+              <p role="status" className="rounded-lg bg-muted px-3 py-2 text-sm">
+                {refreshSummary}
+              </p>
+            ) : null}
             <div className="grid gap-4">
               {filtered.map((route) => (
                 <RouteCard
@@ -262,6 +348,9 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                     setCheckKey((value) => value + 1);
                     setCheck({ routeId: route.id, ...session });
                   }}
+                  refreshing={refreshing.has(route.id)}
+                  refreshNote={refreshNotes[route.id] ?? null}
+                  onRefresh={() => void refreshPrices([route.id])}
                   onDeleteRoute={() => setDeleteRouteId(route.id)}
                   onDeleteLog={(logId) =>
                     commit({
@@ -276,8 +365,10 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
         ) : null}
 
         <footer className="mt-auto border-t border-border pt-4 text-sm text-muted-foreground">
-          Ceny wpisujesz sam. „Czy jest lot?” tylko sprawdza, czy linia sprzedaje połączenie w zapisanym dniu, i nie
-          zapisuje taryfy. Aplikacja nie loguje się do Ryanair ani Wizz Air.
+          „Odśwież ceny” pobiera z Ryanair najtańszy bilet w zapisanym dniu albo zakresie. Przy powrocie cena to suma
+          dwóch biletów w jedną stronę, bez bagażu i opłat dodatkowych. Ceny Wizz Air wpisujesz sam, bo Wizz Air
+          blokuje odczyt z przeglądarki. „Czy jest lot?” tylko sprawdza, czy linia sprzedaje połączenie w zapisanym
+          dniu. Aplikacja nie loguje się do Ryanair ani Wizz Air.
           Kierunki: informator połączeń regularnych Kraków Airport, zima 2026/27, stan na{" "}
           <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>. Tylko Ryanair i Wizz Air.
         </footer>
@@ -511,6 +602,36 @@ function RouteFilters({
       </div>
     </div>
   );
+}
+
+function refreshNote(outcome: RefreshOutcome): string {
+  switch (outcome.status) {
+    case "saved":
+      return `Zapisano ${formatPln(outcome.log.amount)} z Ryanair.`;
+    case "unchanged":
+      return `Bez zmian: ${formatPln(outcome.amount)}.`;
+    case "no-fare":
+      return "Ryanair nie sprzedaje biletów na ten termin.";
+    case "past":
+      return "Ten termin już minął.";
+    case "not-served":
+      return "Ryanair nie lata na tej trasie.";
+    case "failed":
+      if (outcome.reason === "blocked") return "Przeglądarka nie dostała odpowiedzi od Ryanair.";
+      if (outcome.reason === "http") return "Ryanair odrzucił zapytanie. Spróbuj później.";
+      return "Ryanair odpowiedział w nieczytelny sposób.";
+  }
+}
+
+function refreshSummaryText(tally: { saved: number; unchanged: number; noFare: number; past: number; failed: number }) {
+  const parts = [
+    tally.saved > 0 ? `nowe ceny: ${tally.saved}` : null,
+    tally.unchanged > 0 ? `bez zmian: ${tally.unchanged}` : null,
+    tally.noFare > 0 ? `bez biletów w sprzedaży: ${tally.noFare}` : null,
+    tally.past > 0 ? `minione terminy: ${tally.past}` : null,
+    tally.failed > 0 ? `nie udało się pobrać: ${tally.failed}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? `Ryanair: ${parts.join(", ")}.` : "Ryanair: nic do odświeżenia.";
 }
 
 function routeWord(count: number) {

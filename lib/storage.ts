@@ -117,7 +117,7 @@ function readLog(value: unknown): PriceLog | null {
   ) {
     return null;
   }
-  return {
+  const parsed: PriceLog = {
     id: log.id,
     routeId: log.routeId,
     airline: log.airline,
@@ -130,6 +130,8 @@ function readLog(value: unknown): PriceLog | null {
     returnDepart,
     returnArrive,
   };
+  if (typeof log.autoFlights === "string" && log.autoFlights.length > 0) parsed.autoFlights = log.autoFlights;
+  return parsed;
 }
 
 function readOptionalTime(value: unknown): string | null | "invalid" {

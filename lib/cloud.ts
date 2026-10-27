@@ -253,10 +253,17 @@ async function insertRows(
     if (error) return failPersist(error.message);
   }
   if (prices.length > 0) {
-    const { error } = await db.from("fare_prices").insert(prices);
+    let { error } = await db.from("fare_prices").insert(prices);
+    if (error && missingAutoColumn(error.message)) {
+      ({ error } = await db.from("fare_prices").insert(prices.map(({ auto_flights: _auto, ...row }) => row)));
+    }
     if (error) return failPersist(error.message);
   }
   return true;
+}
+
+function missingAutoColumn(message: string) {
+  return /auto_flights/i.test(message);
 }
 
 async function updateRoute(route: Parameters<typeof routeToRow>[0]): Promise<boolean> {
@@ -331,13 +338,13 @@ async function pullStore(): Promise<{ ok: true; data: StoreData } | { ok: false;
   const routes = routesWithTimes.error && missingTimeColumn(routesWithTimes.error.message)
     ? await db.from("fare_routes").select(routeColumns)
     : routesWithTimes;
-  const [prices] = await Promise.all([
-    db
-      .from("fare_prices")
-      .select(
-        "id, route_id, airline, amount, currency, checked_on, outbound_depart, outbound_arrive, return_depart, return_arrive, created_at",
-      ),
-  ]);
+  const priceColumns =
+    "id, route_id, airline, amount, currency, checked_on, outbound_depart, outbound_arrive, return_depart, return_arrive, created_at";
+  const pricesWithAuto = await db.from("fare_prices").select(`${priceColumns}, auto_flights`);
+  const prices =
+    pricesWithAuto.error && missingAutoColumn(pricesWithAuto.error.message)
+      ? await db.from("fare_prices").select(priceColumns)
+      : pricesWithAuto;
   if (routes.error) return { ok: false, error: dbMessage(routes.error.message) };
   if (prices.error) return { ok: false, error: dbMessage(prices.error.message) };
   return { ok: true, data: storeFromRows(routes.data ?? [], prices.data ?? []) };

@@ -39,6 +39,8 @@ export type PriceLog = PriceDraft & {
   routeId: string;
   currency: "PLN";
   createdAt: string;
+  /** Set only on prices read from Ryanair: "FR3799 2026-11-23", legs joined with "; ". */
+  autoFlights?: string | null;
 };
 
 export type StoreData = {

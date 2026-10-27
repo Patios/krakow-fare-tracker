@@ -34,6 +34,9 @@ create table if not exists public.fare_prices (
   created_at timestamptz not null default now()
 );
 
+alter table public.fare_prices
+  add column if not exists auto_flights text;
+
 alter table public.fare_routes
   add column if not exists outbound_depart time,
   add column if not exists outbound_arrive time,

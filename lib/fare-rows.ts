@@ -26,6 +26,7 @@ export type FarePriceInsert = {
   return_depart: string | null;
   return_arrive: string | null;
   created_at: string;
+  auto_flights?: string;
 };
 
 const TIME_FIELDS = ["outboundDepart", "outboundArrive", "returnDepart", "returnArrive"] as const;
@@ -49,7 +50,7 @@ export function routeToRow(route: WatchedRoute): FareRouteInsert {
 }
 
 export function priceToRow(log: PriceLog): FarePriceInsert {
-  return {
+  const row: FarePriceInsert = {
     id: log.id,
     route_id: log.routeId,
     airline: log.airline,
@@ -62,6 +63,8 @@ export function priceToRow(log: PriceLog): FarePriceInsert {
     return_arrive: log.returnArrive,
     created_at: log.createdAt,
   };
+  if (log.autoFlights) row.auto_flights = log.autoFlights;
+  return row;
 }
 
 export function routeFromRow(value: unknown): WatchedRoute | null {
@@ -125,7 +128,7 @@ export function priceFromRow(value: unknown): PriceLog | null {
   ) {
     return null;
   }
-  return {
+  const log: PriceLog = {
     id: row.id,
     routeId: row.route_id,
     airline: row.airline,
@@ -138,6 +141,8 @@ export function priceFromRow(value: unknown): PriceLog | null {
     returnDepart,
     returnArrive,
   };
+  if (typeof row.auto_flights === "string" && row.auto_flights.length > 0) log.autoFlights = row.auto_flights;
+  return log;
 }
 
 export function storeFromRows(routeRows: unknown[], priceRows: unknown[]): StoreData {
