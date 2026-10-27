@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { AIRLINE_HOME_URL, AIRLINE_LABEL, ROUTE_LIST_AS_OF } from "@/lib/airports";
 import { airlineRouteCount, krakowPoint, mappedRoutes } from "@/lib/route-map";
@@ -34,9 +35,12 @@ export function ConnectionMap() {
           <Link href="/" className="inline-flex items-center gap-2 text-sm font-medium text-white/80 transition-colors hover:text-white">
             <ArrowLeft className="size-4" /> Wróć do obserwowanych tras
           </Link>
-          <div className="flex items-center gap-2" aria-hidden>
-            <AirlineMark airline="ryanair" className="size-7" />
-            <AirlineMark airline="wizzair" className="size-7" />
+          <div className="flex items-center gap-2">
+            <ThemeToggle className="h-9" />
+            <div className="flex items-center gap-2" aria-hidden>
+              <AirlineMark airline="ryanair" className="size-7" />
+              <AirlineMark airline="wizzair" className="size-7" />
+            </div>
           </div>
         </div>
       </header>

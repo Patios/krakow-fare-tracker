@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { MapPinned } from "lucide-react";
 import { AccountDialog } from "@/components/account-dialog";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { AirlineMark } from "@/components/airline-mark";
 import { AddRouteDialog } from "@/components/add-route-dialog";
 import { CheckFareDialog } from "@/components/check-fare-dialog";
@@ -119,7 +120,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
     <div className="relative flex flex-1 flex-col">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(880px_380px_at_-8%_-10%,rgb(255_209_0/0.42),transparent_58%),radial-gradient(720px_420px_at_108%_-6%,rgb(198_0_126/0.2),transparent_52%)]"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(880px_380px_at_-8%_-10%,rgb(255_209_0/0.42),transparent_58%),radial-gradient(720px_420px_at_108%_-6%,rgb(198_0_126/0.2),transparent_52%)] dark:bg-[radial-gradient(880px_380px_at_-8%_-10%,rgb(255_209_0/0.14),transparent_58%),radial-gradient(720px_420px_at_108%_-6%,rgb(198_0_126/0.22),transparent_52%)]"
       />
       <header className="bg-ryanair text-white">
         <div className="flex h-1.5" aria-hidden>
@@ -156,9 +157,10 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button nativeButton={false} render={<Link href="/mapa-polaczen" />} variant="outline" className="h-10 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white">
+            <Button nativeButton={false} render={<Link href="/mapa-polaczen" />} variant="outline" className="h-10 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!">
               <MapPinned /> Mapa połączeń
             </Button>
+            <ThemeToggle />
             <AccountDialog />
             <Button type="button" className="h-10 font-semibold" onClick={() => openAdd()} disabled={!ready}>
               Dodaj trasę
@@ -443,8 +445,8 @@ function RouteFilters({
               className={`inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors ${
                 pressed
                   ? airline === "ryanair"
-                    ? "border-ryanair bg-secondary text-ryanair"
-                    : "border-wizz bg-wizz-soft text-wizz"
+                    ? "border-ryanair bg-secondary text-brand-ink dark:border-brand-ink"
+                    : "border-wizz bg-wizz-soft text-wizz-ink"
                   : "border-border bg-card text-muted-foreground"
               }`}
             >
@@ -503,7 +505,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
     <section className="rounded-2xl bg-card px-5 py-10 text-center ring-1 ring-foreground/10">
       <div className="mb-4 flex items-center justify-center gap-3">
         <AirlineMark airline="ryanair" className="size-11" />
-        <span className="font-heading text-3xl font-bold tracking-wide text-ryanair">KRK</span>
+        <span className="font-heading text-3xl font-bold tracking-wide text-brand-ink">KRK</span>
         <AirlineMark airline="wizzair" className="size-11" />
       </div>
       <h2 className="font-heading text-2xl font-medium">Nie obserwujesz jeszcze żadnej trasy</h2>

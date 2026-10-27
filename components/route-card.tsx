@@ -56,7 +56,7 @@ export function RouteCard({
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="font-heading text-xs font-semibold tracking-[0.16em] text-ryanair uppercase">
+            <p className="font-heading text-xs font-semibold tracking-[0.16em] text-brand-ink uppercase">
               KRK → {route.destinationIata}
             </p>
             <h2 className="font-heading text-2xl leading-tight font-semibold tracking-wide">
@@ -98,7 +98,7 @@ export function RouteCard({
         ) : (
           <div>
             <p className="text-xs tracking-wide text-muted-foreground uppercase">Najniższa zapisana</p>
-            <p className="font-heading text-4xl font-bold tracking-wide text-ryanair tabular-nums">{formatPln(lowest)}</p>
+            <p className="font-heading text-4xl font-bold tracking-wide text-brand-ink tabular-nums dark:text-ryanair-yellow">{formatPln(lowest)}</p>
             <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
               <span>Ostatnio {formatPln(latest.amount)}</span>
               <AirlineMark airline={latest.airline} className="size-5" />

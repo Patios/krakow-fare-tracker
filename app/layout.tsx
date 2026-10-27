@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Barlow_Condensed, Outfit } from "next/font/google";
+import Script from "next/script";
+import { themeBootScript } from "@/lib/theme";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -24,8 +26,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="pl"
       className={`${outfit.variable} ${barlow.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <Script id="theme-boot" strategy="beforeInteractive">
+          {themeBootScript}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }

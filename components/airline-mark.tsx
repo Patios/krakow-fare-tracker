@@ -41,7 +41,7 @@ export function AirlineChip({ airline, className }: { airline: Airline; classNam
     <span
       className={cn(
         "inline-flex h-7 items-center gap-1.5 rounded-full pr-2.5 pl-1 text-xs font-semibold",
-        airline === "ryanair" ? "bg-secondary text-ryanair" : "bg-wizz-soft text-wizz",
+        airline === "ryanair" ? "bg-secondary text-brand-ink" : "bg-wizz-soft text-wizz-ink",
         className,
       )}
     >

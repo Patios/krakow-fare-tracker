@@ -95,7 +95,7 @@ export function AccountDialog() {
       <Button
         type="button"
         variant="outline"
-        className="h-10 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white"
+        className="h-10 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
         onClick={() => setOpen(true)}
       >
         {signedIn ? "Konto" : "Zaloguj"}

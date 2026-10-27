@@ -37,7 +37,7 @@ export function DestinationPicker({
       {selected ? (
         <div className="rounded-lg bg-secondary px-3 py-2 text-sm">
           <p>
-            <span className="font-medium text-ryanair">{selected.city}</span>
+            <span className="font-medium text-brand-ink">{selected.city}</span>
             <span className="text-muted-foreground">
               {" "}
               · {selected.airport} · {selected.iata}
@@ -102,7 +102,7 @@ export function DestinationPicker({
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
-                    <span className="font-heading text-sm font-semibold tracking-wide text-ryanair">
+                    <span className="font-heading text-sm font-semibold tracking-wide text-brand-ink">
                       {destination.iata}
                     </span>
                     <span className="mt-1 flex justify-end gap-1">

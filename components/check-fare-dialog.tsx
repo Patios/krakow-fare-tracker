@@ -89,7 +89,7 @@ export function CheckFareDialog({
         </Button>
 
         {savedAmount != null ? (
-          <p role="status" className="text-sm text-ryanair">
+          <p role="status" className="text-sm text-brand-ink">
             Zapisano {formatPln(savedAmount)} w historii.
           </p>
         ) : null}
