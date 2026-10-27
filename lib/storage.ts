@@ -78,6 +78,7 @@ function readRoute(value: unknown): WatchedRoute | null {
     returnDate: route.returnDate ?? null,
     createdAt: route.createdAt,
   };
+  if (route.autoRefresh === true) parsed.autoRefresh = true;
   const timeFields = ["outboundDepart", "outboundArrive", "returnDepart", "returnArrive"] as const;
   if (!timeFields.some((key) => Object.prototype.hasOwnProperty.call(route, key))) return parsed;
   const outboundDepart = readOptionalTime(route.outboundDepart);

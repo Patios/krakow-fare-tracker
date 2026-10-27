@@ -29,6 +29,10 @@ export function RouteCard({
   refreshNote,
   onRefresh,
   onCalendar,
+  autoRefresh,
+  autoIntervalHours,
+  checkedNote,
+  onToggleAuto,
 }: {
   id?: string;
   route: WatchedRoute;
@@ -39,6 +43,10 @@ export function RouteCard({
   refreshNote: string | null;
   onRefresh: () => void;
   onCalendar: () => void;
+  autoRefresh: boolean;
+  autoIntervalHours: number;
+  checkedNote: string | null;
+  onToggleAuto: (enabled: boolean) => void;
   onCheck: (check: { airline: Airline; href: string; blocked: boolean }) => void;
   onDeleteRoute: () => void;
   onDeleteLog: (logId: string) => void;
@@ -207,6 +215,20 @@ export function RouteCard({
           <p role="status" className="text-sm text-muted-foreground">
             {refreshNote}
           </p>
+        ) : null}
+        {servedByRyanair ? (
+          <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex items-center gap-2 font-medium">
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={(event) => onToggleAuto(event.target.checked)}
+                className="size-4 accent-primary"
+              />
+              Odświeżaj cenę Ryanair automatycznie co {autoIntervalHours} h
+            </label>
+            {checkedNote ? <span className="text-xs text-muted-foreground">{checkedNote}</span> : null}
+          </div>
         ) : null}
       </CardContent>
 

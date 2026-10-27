@@ -249,7 +249,10 @@ async function insertRows(
   const db = getSupabase();
   if (!db) return failPersist("Brak konfiguracji Supabase.");
   if (routes.length > 0) {
-    const { error } = await db.from("fare_routes").insert(routes);
+    let { error } = await db.from("fare_routes").insert(routes);
+    if (error && missingAutoRefreshColumn(error.message)) {
+      ({ error } = await db.from("fare_routes").insert(routes.map(({ auto_refresh: _auto, ...row }) => row)));
+    }
     if (error) return failPersist(error.message);
   }
   if (prices.length > 0) {
@@ -266,6 +269,10 @@ function missingAutoColumn(message: string) {
   return /auto_flights/i.test(message);
 }
 
+function missingAutoRefreshColumn(message: string) {
+  return /auto_refresh/i.test(message);
+}
+
 async function updateRoute(route: Parameters<typeof routeToRow>[0]): Promise<boolean> {
   const db = getSupabase();
   if (!db) return failPersist("Brak konfiguracji Supabase.");
@@ -273,6 +280,10 @@ async function updateRoute(route: Parameters<typeof routeToRow>[0]): Promise<boo
   void createdAt;
   const hadTimes = Boolean(fields.outbound_depart || fields.outbound_arrive || fields.return_depart || fields.return_arrive);
   let { data, error } = await db.from("fare_routes").update(fields).eq("id", id).select("id");
+  if (error && missingAutoRefreshColumn(error.message)) {
+    delete fields.auto_refresh;
+    ({ data, error } = await db.from("fare_routes").update(fields).eq("id", id).select("id"));
+  }
   if (error && missingTimeColumn(error.message)) {
     const dates = { ...fields };
     delete dates.outbound_depart;
@@ -332,12 +343,14 @@ async function pullStore(): Promise<{ ok: true; data: StoreData } | { ok: false;
   const db = getSupabase();
   if (!db) return { ok: false, error: "Brak konfiguracji Supabase." };
   const routeColumns = "id, destination_iata, outbound_from, outbound_to, return_date, created_at";
-  const routesWithTimes = await db
-    .from("fare_routes")
-    .select(`${routeColumns}, outbound_depart, outbound_arrive, return_depart, return_arrive`);
-  const routes = routesWithTimes.error && missingTimeColumn(routesWithTimes.error.message)
-    ? await db.from("fare_routes").select(routeColumns)
-    : routesWithTimes;
+  const timeColumns = `${routeColumns}, outbound_depart, outbound_arrive, return_depart, return_arrive`;
+  let routes = await db.from("fare_routes").select(`${timeColumns}, auto_refresh`);
+  if (routes.error && missingAutoRefreshColumn(routes.error.message)) {
+    routes = await db.from("fare_routes").select(timeColumns);
+  }
+  if (routes.error && missingTimeColumn(routes.error.message)) {
+    routes = await db.from("fare_routes").select(routeColumns);
+  }
   const priceColumns =
     "id, route_id, airline, amount, currency, checked_on, outbound_depart, outbound_arrive, return_depart, return_arrive, created_at";
   const pricesWithAuto = await db.from("fare_prices").select(`${priceColumns}, auto_flights`);

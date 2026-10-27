@@ -12,6 +12,7 @@ export type FareRouteInsert = {
   outbound_arrive?: string | null;
   return_depart?: string | null;
   return_arrive?: string | null;
+  auto_refresh?: boolean;
 };
 
 export type FarePriceInsert = {
@@ -46,6 +47,7 @@ export function routeToRow(route: WatchedRoute): FareRouteInsert {
     row.return_depart = route.returnDepart ?? null;
     row.return_arrive = route.returnArrive ?? null;
   }
+  if (Object.prototype.hasOwnProperty.call(route, "autoRefresh")) row.auto_refresh = route.autoRefresh === true;
   return row;
 }
 
@@ -87,6 +89,7 @@ export function routeFromRow(value: unknown): WatchedRoute | null {
     returnDate,
     createdAt: row.created_at,
   };
+  if (row.auto_refresh === true) route.autoRefresh = true;
   const timeColumns = ["outbound_depart", "outbound_arrive", "return_depart", "return_arrive"] as const;
   if (!timeColumns.some((key) => Object.prototype.hasOwnProperty.call(row, key))) return route;
   const outboundDepart = readTime(row.outbound_depart);
@@ -205,7 +208,8 @@ function routeChanged(previous: WatchedRoute, next: WatchedRoute) {
     previous.destinationIata !== next.destinationIata ||
     previous.outboundFrom !== next.outboundFrom ||
     (previous.outboundTo ?? null) !== (next.outboundTo ?? null) ||
-    (previous.returnDate ?? null) !== (next.returnDate ?? null)
+    (previous.returnDate ?? null) !== (next.returnDate ?? null) ||
+    (previous.autoRefresh === true) !== (next.autoRefresh === true)
   ) {
     return true;
   }

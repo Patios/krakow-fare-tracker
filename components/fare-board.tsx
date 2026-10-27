@@ -33,6 +33,18 @@ import {
   startCloudSync,
   subscribeCloud,
 } from "@/lib/cloud";
+import {
+  AUTO_INTERVAL_HOURS,
+  dueRouteIds,
+  getAutoRefreshServerSnapshot,
+  getAutoRefreshSnapshot,
+  nextCheckAt,
+  parseAutoRefresh,
+  readAutoRefresh,
+  recordChecks,
+  setAutoInterval,
+  subscribeAutoRefresh,
+} from "@/lib/auto-refresh";
 import { applyPickedFlights, type PickedLeg } from "@/lib/fare-calendar";
 import { refreshRyanairPrice, type RefreshOutcome } from "@/lib/fare-refresh";
 import { formatPln, todayIso } from "@/lib/format";
@@ -54,6 +66,10 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const pathname = usePathname();
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const cloud = useSyncExternalStore(subscribeCloud, getCloudSnapshot, getCloudServerSnapshot);
+  const autoSettings = parseAutoRefresh(
+    useSyncExternalStore(subscribeAutoRefresh, getAutoRefreshSnapshot, getAutoRefreshServerSnapshot),
+  );
+  const inFlight = useRef(new Set<string>());
   const view = interpretSnapshot(snapshot);
   const signedIn = cloud.auth.status === "signed-in";
   const initialDestination = destinationByIata.has(initialDestinationIata ?? "") ? initialDestinationIata : undefined;
@@ -115,9 +131,52 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const ryanairRouteIds = filtered
     .filter((route) => destinationByIata.get(route.destinationIata)?.airlines.includes("ryanair"))
     .map((route) => route.id);
+  const autoCount = ready?.routes.filter((route) => route.autoRefresh === true).length ?? 0;
   const refreshingAll = ryanairRouteIds.length > 0 && ryanairRouteIds.every((id) => refreshing.has(id));
 
   useEffect(() => startCloudSync(), []);
+
+  const runDueRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    runDueRef.current = () => {
+      if (document.visibilityState === "hidden") return;
+      const current = interpretSnapshot(getSnapshot());
+      if (current.status !== "ready") return;
+      const due = dueRouteIds(current.data.routes, readAutoRefresh(), todayIso());
+      if (due.length > 0) void refreshPrices(due, { auto: true });
+    };
+  });
+
+  useEffect(() => {
+    const run = () => runDueRef.current();
+    const first = window.setTimeout(run, 1500);
+    const timer = window.setInterval(run, 60_000);
+    document.addEventListener("visibilitychange", run);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", run);
+    };
+  }, []);
+
+  function toggleAutoRefresh(routeId: string, enabled: boolean) {
+    const current = interpretSnapshot(getSnapshot());
+    if (current.status !== "ready") return;
+    const next = {
+      routes: current.data.routes.map((route) =>
+        route.id === routeId ? { ...route, autoRefresh: enabled } : route,
+      ),
+      logs: current.data.logs,
+    };
+    try {
+      saveStore(next);
+      queuePersist(current.data, next);
+      setSaveError(null);
+      if (enabled) window.setTimeout(() => runDueRef.current(), 0);
+    } catch {
+      setSaveError("Nie udało się zapisać w tej przeglądarce.");
+    }
+  }
 
   useEffect(() => {
     if (!freshRouteId) return;
@@ -185,9 +244,11 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
     }
   }
 
-  async function refreshPrices(routeIds: string[]) {
-    const queue = routeIds.filter((id) => !refreshing.has(id));
+  async function refreshPrices(routeIds: string[], { auto = false }: { auto?: boolean } = {}) {
+    const queue = routeIds.filter((id) => !inFlight.current.has(id));
     if (queue.length === 0) return;
+    for (const id of queue) inFlight.current.add(id);
+    recordChecks(queue);
     setRefreshing((current) => new Set([...current, ...queue]));
     setRefreshNotes((current) => {
       const next = { ...current };
@@ -230,6 +291,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
           note = "Nie udało się pobrać ceny z Ryanair.";
           tally.failed += 1;
         }
+        inFlight.current.delete(id);
         setRefreshNotes((current) => ({ ...current, [id]: note }));
         setRefreshing((current) => {
           const next = new Set(current);
@@ -240,7 +302,10 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
     }
 
     await Promise.all(Array.from({ length: Math.min(3, queue.length) }, worker));
-    if (queue.length > 1) setRefreshSummary(refreshSummaryText(tally));
+    if (queue.length > 1 || auto) {
+      const prefix = auto ? `Automatycznie o ${clockNow()}. ` : "";
+      setRefreshSummary(prefix + refreshSummaryText(tally));
+    }
   }
 
   function openAdd(destinationIata?: string) {
@@ -379,16 +444,36 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                 górze, dalej od najniższej ceny. Pozostałe bez wpisu są na końcu.
               </p>
               {ryanairRouteIds.length > 0 ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="shrink-0"
-                  disabled={refreshingAll}
-                  onClick={() => void refreshPrices(ryanairRouteIds)}
-                >
-                  <RefreshCw className={refreshingAll ? "animate-spin" : undefined} />
-                  {refreshingAll ? "Pobieram ceny…" : "Odśwież ceny Ryanair"}
-                </Button>
+                <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={refreshingAll}
+                    onClick={() => void refreshPrices(ryanairRouteIds)}
+                  >
+                    <RefreshCw className={refreshingAll ? "animate-spin" : undefined} />
+                    {refreshingAll ? "Pobieram ceny…" : "Odśwież ceny Ryanair"}
+                  </Button>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    Zaznaczone trasy odświeżaj
+                    <select
+                      value={autoSettings.intervalHours}
+                      onChange={(event) => setAutoInterval(Number(event.target.value))}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                    >
+                      {AUTO_INTERVAL_HOURS.map((hours) => (
+                        <option key={hours} value={hours}>
+                          co {hours} h
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {autoCount > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Automatycznie: {autoCount} {routeWord(autoCount)}, gdy ta strona jest otwarta.
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
               </div>
             )}
@@ -419,6 +504,13 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                   refreshing={refreshing.has(route.id)}
                   refreshNote={refreshNotes[route.id] ?? null}
                   onRefresh={() => void refreshPrices([route.id])}
+                  autoRefresh={route.autoRefresh === true}
+                  autoIntervalHours={autoSettings.intervalHours}
+                  checkedNote={checkedLabel(
+                    autoSettings.lastChecked[route.id],
+                    route.autoRefresh ? nextCheckAt(route.id, autoSettings) : null,
+                  )}
+                  onToggleAuto={(enabled) => toggleAutoRefresh(route.id, enabled)}
                   onCalendar={() => {
                     setCalendarKey((value) => value + 1);
                     setCalendarRouteId(route.id);
@@ -695,6 +787,20 @@ function RouteFilters({
       </div>
     </div>
   );
+}
+
+const clockFormatter = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" });
+
+function clockNow() {
+  return clockFormatter.format(new Date());
+}
+
+function checkedLabel(lastChecked: string | undefined, next: Date | null) {
+  if (!lastChecked) return null;
+  const last = new Date(lastChecked);
+  const sameDay = last.toDateString() === new Date().toDateString();
+  const lastText = sameDay ? clockFormatter.format(last) : `${last.toLocaleDateString("pl-PL")} ${clockFormatter.format(last)}`;
+  return next ? `Sprawdzono ${lastText}, następnie ok. ${clockFormatter.format(next)}` : `Sprawdzono ${lastText}`;
 }
 
 function refreshNote(outcome: RefreshOutcome): string {

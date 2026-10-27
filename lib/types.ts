@@ -19,6 +19,8 @@ export type WatchedRoute = {
   outboundArrive?: string | null;
   returnDepart?: string | null;
   returnArrive?: string | null;
+  /** Ryanair price is fetched on a timer while the page is open. */
+  autoRefresh?: boolean;
 };
 
 export type FlightTimes = {
