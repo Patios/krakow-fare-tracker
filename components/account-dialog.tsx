@@ -33,6 +33,7 @@ export function AccountDialog() {
   const [messageError, setMessageError] = useState(false);
   const [busy, setBusy] = useState(false);
   const signedIn = cloud.auth.status === "signed-in";
+  const accountEmail = signedIn ? cloud.auth.email : "";
   const recovery = cloud.auth.status === "signed-in" && cloud.auth.recovery;
 
   useEffect(() => {
@@ -95,10 +96,11 @@ export function AccountDialog() {
       <Button
         type="button"
         variant="outline"
-        className="h-10 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
+        className="h-auto min-h-10 max-w-full border-white/35 bg-white/10 px-3 py-2 font-semibold whitespace-normal! text-white break-all hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
+        title={signedIn ? accountEmail : undefined}
         onClick={() => setOpen(true)}
       >
-        {signedIn ? "Konto" : "Zaloguj"}
+        {signedIn ? accountEmail : "Zaloguj"}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
