@@ -16,7 +16,7 @@ const barlow = Barlow_Condensed({
 export const metadata: Metadata = {
   title: "Tanie loty z Krakowa",
   description:
-    "Obserwuj trasy Ryanair i Wizz Air z lotniska KRK. Aplikacja otwiera gotowe wyszukiwanie i trzyma wpisane ceny w tej przeglądarce.",
+    "Obserwuj trasy Ryanair i Wizz Air z lotniska KRK. Aplikacja otwiera gotowe wyszukiwanie, a wpisane ceny zostają na koncie albo w tej przeglądarce.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

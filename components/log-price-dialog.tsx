@@ -31,7 +31,7 @@ export function LogPriceDialog({
         <DialogHeader>
           <DialogTitle className="font-heading text-lg">Zapisz cenę</DialogTitle>
           <DialogDescription>
-            {city}. Wpisz kwotę i godziny, które widzisz u przewoźnika. Zapis zostaje w tej przeglądarce, w PLN.
+            {city}. Wpisz kwotę i godziny, które widzisz u przewoźnika. Zapis jest w PLN.
           </DialogDescription>
         </DialogHeader>
         <PriceLogForm

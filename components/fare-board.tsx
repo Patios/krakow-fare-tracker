@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { MapPinned } from "lucide-react";
+import { AccountDialog } from "@/components/account-dialog";
 import { AirlineMark } from "@/components/airline-mark";
 import { AddRouteDialog } from "@/components/add-route-dialog";
 import { CheckFareDialog } from "@/components/check-fare-dialog";
@@ -18,6 +19,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ROUTE_LIST_AS_OF, destinationByIata } from "@/lib/airports";
+import {
+  getCloudServerSnapshot,
+  getCloudSnapshot,
+  queuePersist,
+  refreshCloud,
+  startCloudSync,
+  subscribeCloud,
+} from "@/lib/cloud";
 import { formatPln } from "@/lib/format";
 import { lowestLoggedPrice, orderedLogs, priceDrop, sortRoutes } from "@/lib/routes";
 import {
@@ -33,7 +42,9 @@ import type { Airline, PriceDraft, StoreData } from "@/lib/types";
 
 export function FareBoard({ initialDestinationIata }: { initialDestinationIata?: string }) {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const cloud = useSyncExternalStore(subscribeCloud, getCloudSnapshot, getCloudServerSnapshot);
   const view = interpretSnapshot(snapshot);
+  const signedIn = cloud.auth.status === "signed-in";
   const initialDestination = destinationByIata.has(initialDestinationIata ?? "") ? initialDestinationIata : undefined;
   const [addOpen, setAddOpen] = useState(initialDestination != null);
   const [addKey, setAddKey] = useState(0);
@@ -64,9 +75,13 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const checkDestination = checkRoute ? destinationByIata.get(checkRoute.destinationIata) : undefined;
   const deleteRoute = ready?.routes.find((route) => route.id === deleteRouteId) ?? null;
 
+  useEffect(() => startCloudSync(), []);
+
   function commit(next: StoreData) {
+    if (!ready) return false;
     try {
       saveStore(next);
+      queuePersist(ready, next);
       setSaveError(null);
       return true;
     } catch {
@@ -105,14 +120,17 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
               Tanie loty z Krakowa
             </h1>
             <p className="mt-3 max-w-xl text-base text-white/75">
-              Ryanair i Wizz Air. Start zawsze z KRK. Ceny zapisujesz sam — historia zostaje w tej
-              przeglądarce.
+              Ryanair i Wizz Air. Start zawsze z KRK. Ceny zapisujesz sam.{" "}
+              {signedIn
+                ? "Historia jest na Twoim koncie Supabase."
+                : "Bez logowania historia zostaje w tej przeglądarce."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button nativeButton={false} render={<Link href="/mapa-polaczen" />} variant="outline" className="h-10 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white">
               <MapPinned /> Mapa połączeń
             </Button>
+            <AccountDialog />
             <Button type="button" className="h-10 font-semibold" onClick={() => openAdd()} disabled={!ready}>
               Dodaj trasę
             </Button>
@@ -121,11 +139,12 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
       </header>
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
 
-        {saveError ? (
+        {saveError || cloud.error ? (
           <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {saveError}
+            {saveError ?? cloud.error}
           </p>
         ) : null}
+        {cloud.syncing ? <p className="text-sm text-muted-foreground">Synchronizuję z kontem…</p> : null}
 
         {view.status === "loading" ? <LoadingState /> : null}
         {view.status === "error" ? (
@@ -139,6 +158,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
               try {
                 clearStore();
                 setSaveError(null);
+                if (signedIn) void refreshCloud();
               } catch {
                 setSaveError("Nie udało się wyczyścić zapisów w tej przeglądarce.");
               }
@@ -184,7 +204,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
         ) : null}
 
         <footer className="mt-auto border-t border-border pt-4 text-sm text-muted-foreground">
-          Ceny nie pochodzą od linii. Aplikacja nie pobiera taryf i nie loguje się do żadnego konta.
+          Ceny nie pochodzą od linii. Aplikacja nie pobiera taryf i nie loguje się do Ryanair ani Wizz Air.
           Kierunki: informator połączeń regularnych Kraków Airport, zima 2026/27, stan na{" "}
           <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>. Tylko Ryanair i Wizz Air.
         </footer>
@@ -296,7 +316,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
             <DialogTitle>Usunąć tę trasę?</DialogTitle>
             <DialogDescription>
               {deleteRoute
-                ? `${destinationByIata.get(deleteRoute.destinationIata)?.city ?? deleteRoute.destinationIata} zniknie razem z historią cen. Zostaje to tylko w tej przeglądarce.`
+                ? `${destinationByIata.get(deleteRoute.destinationIata)?.city ?? deleteRoute.destinationIata} zniknie razem z historią cen${signedIn ? " z konta i z tej przeglądarki" : ". Zostaje to tylko w tej przeglądarce"}.`
                 : "Trasa zniknie razem z historią cen."}
             </DialogDescription>
           </DialogHeader>
@@ -361,7 +381,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       <h2 className="font-heading text-2xl font-medium">Nie obserwujesz jeszcze żadnej trasy</h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
         Dodaj kierunek z Krakowa. „Sprawdź dziś” otworzy wyszukiwarkę linii w osobnym oknie i formularz
-        zapisu ceny. Kwota trafia od razu do historii w tej przeglądarce.
+        zapisu ceny. Po zalogowaniu kwota trafia na konto Supabase.
       </p>
       <Button type="button" className="mt-5 h-10" onClick={onAdd}>
         Dodaj trasę
@@ -384,8 +404,8 @@ function ErrorState({
       <h2 className="font-heading text-2xl font-medium">Nie udało się odczytać zapisów</h2>
       <p className="mt-2 max-w-xl text-sm text-muted-foreground">
         {kind === "blocked"
-          ? "Ta przeglądarka blokuje pamięć strony, więc lista tras się nie otworzy. Historia cen jest trzymana lokalnie i nie ma jej na serwerze."
-          : "Zapis w tej przeglądarce jest uszkodzony. Możesz go wyczyścić i zacząć od nowa. Kopii na serwerze nie ma."}
+          ? "Ta przeglądarka blokuje pamięć strony, więc lista tras się nie otworzy."
+          : "Zapis w tej przeglądarce jest uszkodzony. Wyczyszczenie nie kasuje konta Supabase — zalogowane trasy wczytają się ponownie."}
       </p>
       <div className="mt-5 flex flex-col gap-2 sm:flex-row">
         {kind === "corrupt" ? (
