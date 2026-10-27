@@ -22,10 +22,14 @@ import { krakowPoint, mappedRoutes, withLiveRyanair } from "@/lib/route-map";
 import type { Airline } from "@/lib/types";
 
 const color: Record<Airline, string> = { ryanair: "#ffd100", wizzair: "#c6007e" };
+type Season = "summer" | "winter";
+const seasonColor: Record<Season, string> = { summer: "#ffd100", winter: "#bae6fd" };
+const seasonLabel: Record<Season, string> = { summer: "Letni", winter: "Zimowy" };
 
 export function ConnectionMap() {
   const router = useRouter();
   const [enabledAirlines, setEnabledAirlines] = useState<Airline[]>(["ryanair", "wizzair"]);
+  const [enabledSeasons, setEnabledSeasons] = useState<Season[]>(["summer", "winter"]);
   const [activeRouteIata, setActiveRouteIata] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
@@ -34,12 +38,23 @@ export function ConnectionMap() {
   );
   const live = network ? withLiveRyanair(network.airports) : { routes: mappedRoutes, unplaced: [] };
   const newIatas = new Set(live.routes.filter((route) => !destinationByIata.has(route.iata)).map((route) => route.iata));
-  const visibleRoutes = live.routes.filter((route) =>
-    route.airlines.some((airline) => enabledAirlines.includes(airline)),
+  function matchesSeason(iata: string) {
+    const season = routeSeason(iata, network);
+    return (
+      (enabledSeasons.includes("summer") && season.summer) || (enabledSeasons.includes("winter") && season.winter)
+    );
+  }
+  const visibleRoutes = live.routes.filter(
+    (route) => route.airlines.some((airline) => enabledAirlines.includes(airline)) && matchesSeason(route.iata),
   );
+  const visibleUnplaced = live.unplaced.filter((airport) => matchesSeason(airport.iata));
   const airlineCount = {
     ryanair: live.routes.filter((route) => route.airlines.includes("ryanair")).length,
     wizzair: live.routes.filter((route) => route.airlines.includes("wizzair")).length,
+  };
+  const seasonCount: Record<Season, number> = {
+    summer: live.routes.filter((route) => routeSeason(route.iata, network).summer).length,
+    winter: live.routes.filter((route) => routeSeason(route.iata, network).winter).length,
   };
   const missingFromSale = network
     ? RYANAIR_IATA.filter((iata) => !network.airports.some((airport) => airport.iata === iata))
@@ -69,6 +84,12 @@ export function ConnectionMap() {
   function toggleAirline(airline: Airline) {
     setEnabledAirlines((current) =>
       current.includes(airline) ? current.filter((item) => item !== airline) : [...current, airline],
+    );
+  }
+
+  function toggleSeason(season: Season) {
+    setEnabledSeasons((current) =>
+      current.includes(season) ? current.filter((item) => item !== season) : [...current, season],
     );
   }
 
@@ -114,6 +135,8 @@ export function ConnectionMap() {
             <span className="mr-1 text-white/65">Pokaż połączenia:</span>
             <AirlineFilter airline="ryanair" count={airlineCount.ryanair} active={enabledAirlines.includes("ryanair")} onToggle={toggleAirline} />
             <AirlineFilter airline="wizzair" count={airlineCount.wizzair} active={enabledAirlines.includes("wizzair")} onToggle={toggleAirline} />
+            <SeasonFilter season="summer" count={seasonCount.summer} active={enabledSeasons.includes("summer")} onToggle={toggleSeason} />
+            <SeasonFilter season="winter" count={seasonCount.winter} active={enabledSeasons.includes("winter")} onToggle={toggleSeason} />
             <button
               type="button"
               onClick={() => void refreshNetwork()}
@@ -171,6 +194,9 @@ export function ConnectionMap() {
             <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-[#061936]/85 px-2 py-1 text-[10px] font-semibold tracking-wide text-white/70">MAPA POŁĄCZEŃ Z KRAKOWA</div>
           </div>
         </section>
+        <Button nativeButton={false} render={<Link href="/" />} className="mt-4 h-9 self-start">
+          Przejdź do cen
+        </Button>
         <section className="mt-7" aria-labelledby="destinations-heading">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
             <h2 id="destinations-heading" className="font-heading text-2xl font-semibold tracking-wide uppercase">Kierunki z Krakowa</h2>
@@ -199,14 +225,22 @@ export function ConnectionMap() {
               </li>
             ))}
           </ul>
-          {visibleRoutes.length === 0 ? <p className="mt-4 rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-sm text-white/70">Włącz co najmniej jedną linię, aby zobaczyć połączenia.</p> : null}
-          {live.unplaced.length > 0 ? (
+          {visibleRoutes.length === 0 ? (
+            <p className="mt-4 rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-sm text-white/70">
+              {enabledAirlines.length === 0
+                ? "Włącz co najmniej jedną linię, aby zobaczyć połączenia."
+                : enabledSeasons.length === 0
+                  ? "Włącz sezon letni albo zimowy, aby zobaczyć miasta."
+                  : "Brak miast dla wybranych filtrów."}
+            </p>
+          ) : null}
+          {visibleUnplaced.length > 0 ? (
             <p className="mt-4 text-sm text-white/70">
-              Bez punktu na mapie: {live.unplaced.map((airport) => `${airport.city} (${airport.iata})`).join(", ")}. Te kierunki są w wyszukiwarce po odświeżeniu.
+              Bez punktu na mapie: {visibleUnplaced.map((airport) => `${airport.city} (${airport.iata})`).join(", ")}. Te kierunki są w wyszukiwarce po odświeżeniu.
             </p>
           ) : null}
         </section>
-        <div className="mt-6 flex flex-col justify-between gap-4 border-t border-white/15 pt-5 text-sm text-white/65 sm:flex-row sm:items-center">
+        <div className="mt-6 border-t border-white/15 pt-5 text-sm text-white/65">
           <p>
             {network ? (
               <>
@@ -219,7 +253,6 @@ export function ConnectionMap() {
               </>
             )}
           </p>
-          <Button nativeButton={false} render={<Link href="/" />} className="h-9 self-start">Przejdź do cen</Button>
         </div>
       </main>
     </div>
@@ -263,6 +296,44 @@ function formatChecked(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));
+}
+
+function SeasonFilter({
+  season,
+  count,
+  active,
+  onToggle,
+}: {
+  season: Season;
+  count: number;
+  active: boolean;
+  onToggle: (season: Season) => void;
+}) {
+  const Icon = season === "summer" ? Sun : Snowflake;
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={() => onToggle(season)}
+      className="inline-flex h-9 items-center gap-2 rounded-lg border px-3 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      style={{
+        borderColor: active ? seasonColor[season] : "rgb(255 255 255 / 0.22)",
+        backgroundColor: active ? `${seasonColor[season]}22` : "transparent",
+        color: active ? "white" : "rgb(255 255 255 / 0.55)",
+      }}
+    >
+      <Icon className="size-3.5" style={{ color: seasonColor[season] }} aria-hidden />
+      {seasonLabel[season]} · {count} {cityCountWord(count)}
+    </button>
+  );
+}
+
+function cityCountWord(count: number) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (count === 1) return "miasto";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "miasta";
+  return "miast";
 }
 
 function AirlineFilter({
