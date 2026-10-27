@@ -37,6 +37,33 @@ const coordinates: Record<string, Coordinates> = {
 
 const bounds = { west: -18, east: 37, north: 63, south: 24 };
 
+/** Airports Ryanair sells from KRK that are not in the 20 Oct 2026 winter guide. */
+export const EXTRA_COORDINATES: Record<string, Coordinates> = {
+  AOI: { lat: 43.62, lon: 13.36 },
+  ATH: { lat: 37.94, lon: 23.94 },
+  CDT: { lat: 40.21, lon: 0.07 },
+  CFU: { lat: 39.6, lon: 19.91 },
+  CHQ: { lat: 35.53, lon: 24.15 },
+  GRO: { lat: 41.9, lon: 2.76 },
+  LDE: { lat: 43.19, lon: -0.0 },
+  OLB: { lat: 40.9, lon: 9.52 },
+  PMI: { lat: 39.55, lon: 2.74 },
+  RHO: { lat: 36.41, lon: 28.09 },
+  RMI: { lat: 44.02, lon: 12.61 },
+  SZZ: { lat: 53.58, lon: 14.9 },
+  TGD: { lat: 42.36, lon: 19.25 },
+  TNG: { lat: 35.73, lon: -5.92 },
+  TRN: { lat: 45.2, lon: 7.65 },
+  ZAD: { lat: 44.11, lon: 15.35 },
+};
+
+export function projectAirport(lat: number, lon: number): { x: number; y: number } {
+  return {
+    x: ((lon - bounds.west) / (bounds.east - bounds.west)) * 100,
+    y: ((bounds.north - lat) / (bounds.north - bounds.south)) * 100,
+  };
+}
+
 export type MappedRoute = {
   iata: string;
   city: string;
@@ -61,6 +88,26 @@ export const mappedRoutes: MappedRoute[] = destinations.map((destination) => {
     y: ((bounds.north - position.lat) / (bounds.north - bounds.south)) * 100,
   };
 });
+
+export function withLiveRyanair(live: { iata: string; city: string; country: string }[]): {
+  routes: MappedRoute[];
+  unplaced: { iata: string; city: string; country: string }[];
+} {
+  const known = new Set(mappedRoutes.map((route) => route.iata));
+  const added: MappedRoute[] = [];
+  const unplaced: { iata: string; city: string; country: string }[] = [];
+  for (const airport of live) {
+    if (known.has(airport.iata)) continue;
+    const position = EXTRA_COORDINATES[airport.iata];
+    if (!position) {
+      unplaced.push(airport);
+      continue;
+    }
+    added.push({ ...airport, airlines: ["ryanair"], ...projectAirport(position.lat, position.lon) });
+  }
+  added.sort((a, b) => a.city.localeCompare(b.city, "pl"));
+  return { routes: [...mappedRoutes, ...added], unplaced };
+}
 
 export const airlineRouteCount: Record<Airline, number> = {
   ryanair: mappedRoutes.filter((route) => route.airlines.includes("ryanair")).length,

@@ -1,4 +1,4 @@
-import { destinationByIata } from "./airports";
+import { lookupDestination } from "./network-refresh";
 import { isIsoDate, roundMoney } from "./format";
 import { readJson, type FlightFetch, type FlightReadFailure } from "./flight-day";
 import type { Destination, PriceLog, SearchTrip } from "./types";
@@ -62,7 +62,7 @@ export function parseFinder(payload: unknown, trip: SearchTrip): { routes: Found
       if (!back || back.arrival !== "KRK" || back.origin !== outbound.arrival || back.leg.date !== trip.returnDate) continue;
       inbound = back.leg;
     }
-    const destination = destinationByIata.get(outbound.arrival);
+    const destination = lookupDestination(outbound.arrival);
     if (!destination || !destination.airlines.includes("ryanair")) {
       unlisted += 1;
       continue;

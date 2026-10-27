@@ -1,4 +1,4 @@
-import { destinationByIata } from "./airports";
+import { lookupDestination } from "./network-refresh";
 import { formatDate, isIsoDate, roundMoney } from "./format";
 import { readJson, ryanairFaresUrl, type FlightFetch, type FlightReadFailure } from "./flight-day";
 import { orderedLogs } from "./routes";
@@ -65,7 +65,7 @@ export async function refreshRyanairPrice(
   signal?: AbortSignal,
   now: () => Date = () => new Date(),
 ): Promise<RefreshOutcome> {
-  if (!destinationByIata.get(route.destinationIata)?.airlines.includes("ryanair")) return { status: "not-served" };
+  if (!lookupDestination(route.destinationIata)?.airlines.includes("ryanair")) return { status: "not-served" };
 
   const windowEnd = route.returnDate
     ? minDate(route.outboundTo ?? route.outboundFrom, route.returnDate)

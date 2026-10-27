@@ -1,14 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { AIRLINE_HOME_URL, AIRLINE_LABEL, ROUTE_LIST_AS_OF } from "@/lib/airports";
-import { airlineRouteCount, krakowPoint, mappedRoutes } from "@/lib/route-map";
+import { AIRLINE_HOME_URL, AIRLINE_LABEL, ROUTE_LIST_AS_OF, RYANAIR_IATA, destinationByIata } from "@/lib/airports";
+import { formatDate, todayIso } from "@/lib/format";
+import {
+  getNetworkServerSnapshot,
+  getNetworkSnapshot,
+  loadRyanairNetwork,
+  parseNetworkSnapshot,
+  saveNetwork,
+  subscribeNetwork,
+} from "@/lib/network-refresh";
+import { krakowPoint, mappedRoutes, withLiveRyanair } from "@/lib/route-map";
 import type { Airline } from "@/lib/types";
 
 const color: Record<Airline, string> = { ryanair: "#ffd100", wizzair: "#c6007e" };
@@ -17,9 +26,44 @@ export function ConnectionMap() {
   const router = useRouter();
   const [enabledAirlines, setEnabledAirlines] = useState<Airline[]>(["ryanair", "wizzair"]);
   const [activeRouteIata, setActiveRouteIata] = useState<string | null>(null);
-  const visibleRoutes = mappedRoutes.filter((route) =>
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
+  const network = parseNetworkSnapshot(
+    useSyncExternalStore(subscribeNetwork, getNetworkSnapshot, getNetworkServerSnapshot),
+  );
+  const live = network ? withLiveRyanair(network.airports) : { routes: mappedRoutes, unplaced: [] };
+  const newIatas = new Set(live.routes.filter((route) => !destinationByIata.has(route.iata)).map((route) => route.iata));
+  const visibleRoutes = live.routes.filter((route) =>
     route.airlines.some((airline) => enabledAirlines.includes(airline)),
   );
+  const airlineCount = {
+    ryanair: live.routes.filter((route) => route.airlines.includes("ryanair")).length,
+    wizzair: live.routes.filter((route) => route.airlines.includes("wizzair")).length,
+  };
+  const missingFromSale = network
+    ? RYANAIR_IATA.filter((iata) => !network.airports.some((airport) => airport.iata === iata))
+    : [];
+
+  async function refreshNetwork() {
+    setRefreshing(true);
+    setRefreshError("");
+    try {
+      const result = await loadRyanairNetwork(todayIso());
+      if (!result.ok) {
+        setRefreshError(
+          result.reason === "blocked"
+            ? "Przeglądarka nie dostała odpowiedzi od Ryanair."
+            : "Ryanair nie zwrócił czytelnej siatki połączeń.",
+        );
+        return;
+      }
+      saveNetwork(result.snapshot);
+    } catch {
+      setRefreshError("Nie udało się pobrać siatki z Ryanair.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   function toggleAirline(airline: Airline) {
     setEnabledAirlines((current) =>
@@ -67,10 +111,38 @@ export function ConnectionMap() {
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="mr-1 text-white/65">Pokaż połączenia:</span>
-            <AirlineFilter airline="ryanair" active={enabledAirlines.includes("ryanair")} onToggle={toggleAirline} />
-            <AirlineFilter airline="wizzair" active={enabledAirlines.includes("wizzair")} onToggle={toggleAirline} />
+            <AirlineFilter airline="ryanair" count={airlineCount.ryanair} active={enabledAirlines.includes("ryanair")} onToggle={toggleAirline} />
+            <AirlineFilter airline="wizzair" count={airlineCount.wizzair} active={enabledAirlines.includes("wizzair")} onToggle={toggleAirline} />
+            <button
+              type="button"
+              onClick={() => void refreshNetwork()}
+              disabled={refreshing}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/22 px-3 font-medium text-white transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-60"
+            >
+              <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
+              {refreshing ? "Pobieram siatkę…" : "Odśwież siatkę"}
+            </button>
           </div>
         </div>
+        {refreshError ? (
+          <p role="alert" className="mt-4 text-sm text-ryanair-yellow">
+            {refreshError}
+          </p>
+        ) : null}
+        {network ? (
+          <p className="mt-4 max-w-3xl text-sm text-white/75" role="status">
+            Ryanair sprzedaje bilety do {network.airports.length} lotnisk z KRK do {formatDate(network.through)}.
+            {newIatas.size + live.unplaced.length > 0
+              ? ` Nowe względem zimowego rozkładu: ${[
+                  ...[...newIatas].map((iata) => live.routes.find((route) => route.iata === iata)?.city ?? iata),
+                  ...live.unplaced.map((airport) => airport.city),
+                ].join(", ")}.`
+              : " Nie ma kierunków spoza zimowego rozkładu."}
+            {missingFromSale.length > 0
+              ? ` Bez biletów w tym oknie: ${missingFromSale.map((iata) => destinationByIata.get(iata)?.city ?? iata).join(", ")}. Zostają na mapie.`
+              : " Wszystkie kierunki z zimowego rozkładu nadal mają bilety."}
+          </p>
+        ) : null}
         <section className="mt-7 rounded-2xl border border-white/15 bg-[#0b2a61]/70 p-2 shadow-2xl shadow-black/25 sm:p-4" aria-label="Mapa tras z Krakowa">
           <div className="connection-map relative aspect-[1.55/1] overflow-hidden rounded-xl border border-white/10 bg-[#082454]">
             <div aria-hidden className="absolute inset-0 opacity-30 [background-image:linear-gradient(#7db0dc22_1px,transparent_1px),linear-gradient(90deg,#7db0dc22_1px,transparent_1px)] [background-size:10%_12.82%]" />
@@ -112,7 +184,7 @@ export function ConnectionMap() {
                   onMouseEnter={() => setActiveRouteIata(route.iata)}
                   onMouseLeave={() => setActiveRouteIata(null)}
                 >
-                  <span className="min-w-0"><span className="block truncate font-medium text-white">{route.city}</span><span className="block truncate text-xs text-white/55">{route.country} · {route.iata}</span></span>
+                  <span className="min-w-0"><span className="block truncate font-medium text-white">{route.city}{newIatas.has(route.iata) ? " · nowy" : ""}</span><span className="block truncate text-xs text-white/55">{route.country} · {route.iata}</span></span>
                   <span className="flex shrink-0 gap-1" aria-label={route.airlines.map((airline) => AIRLINE_LABEL[airline]).join(" i ")}>
                     {route.airlines.filter((airline) => enabledAirlines.includes(airline)).map((airline) => <span key={airline} className="size-2.5 rounded-full" style={{ backgroundColor: color[airline] }} />)}
                   </span>
@@ -121,9 +193,25 @@ export function ConnectionMap() {
             ))}
           </ul>
           {visibleRoutes.length === 0 ? <p className="mt-4 rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-sm text-white/70">Włącz co najmniej jedną linię, aby zobaczyć połączenia.</p> : null}
+          {live.unplaced.length > 0 ? (
+            <p className="mt-4 text-sm text-white/70">
+              Bez punktu na mapie: {live.unplaced.map((airport) => `${airport.city} (${airport.iata})`).join(", ")}. Te kierunki są w wyszukiwarce po odświeżeniu.
+            </p>
+          ) : null}
         </section>
         <div className="mt-6 flex flex-col justify-between gap-4 border-t border-white/15 pt-5 text-sm text-white/65 sm:flex-row sm:items-center">
-          <p>Stan siatki połączeń: <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>. Tylko Ryanair i Wizz Air.</p>
+          <p>
+            {network ? (
+              <>
+                Ryanair sprawdzony <time dateTime={network.checkedAt}>{formatChecked(network.checkedAt)}</time>. Wizz Air zostaje z zimowego rozkładu z{" "}
+                <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>, bo jego siatki nie da się odczytać z przeglądarki.
+              </>
+            ) : (
+              <>
+                Stan siatki połączeń: <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>. „Odśwież siatkę” pyta Ryanair o bilety na najbliższe 6 miesięcy.
+              </>
+            )}
+          </p>
           <Button nativeButton={false} render={<Link href="/" />} className="h-9 self-start">Przejdź do cen</Button>
         </div>
       </main>
@@ -131,7 +219,35 @@ export function ConnectionMap() {
   );
 }
 
-function AirlineFilter({ airline, active, onToggle }: { airline: Airline; active: boolean; onToggle: (airline: Airline) => void }) {
+function routeCountWord(count: number) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (count === 1) return "trasa";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "trasy";
+  return "tras";
+}
+
+function formatChecked(iso: string) {
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
+
+function AirlineFilter({
+  airline,
+  count,
+  active,
+  onToggle,
+}: {
+  airline: Airline;
+  count: number;
+  active: boolean;
+  onToggle: (airline: Airline) => void;
+}) {
   return (
     <button
       type="button"
@@ -145,7 +261,7 @@ function AirlineFilter({ airline, active, onToggle }: { airline: Airline; active
       }}
     >
       <span className="size-2.5 rounded-full" style={{ backgroundColor: color[airline] }} />
-      {AIRLINE_LABEL[airline]} · {airlineRouteCount[airline]} tras
+      {AIRLINE_LABEL[airline]} · {count} {routeCountWord(count)}
     </button>
   );
 }

@@ -5,7 +5,8 @@ import { CalendarDays, RefreshCw } from "lucide-react";
 import { formatAutoFlights } from "@/lib/fare-refresh";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { FlightDayCheck } from "@/components/flight-day-check";
-import { AIRLINE_LABEL, destinationByIata } from "@/lib/airports";
+import { AIRLINE_LABEL } from "@/lib/airports";
+import { lookupDestination } from "@/lib/network-refresh";
 import { flightClock, formatDate, formatFlightTimes, formatPln, formatTripDates, todayIso } from "@/lib/format";
 import { latestLogsByAirline, lowestLoggedPrice, orderedLogs, priceDrop } from "@/lib/routes";
 import { openAirlineWindow } from "@/lib/airline-window";
@@ -53,7 +54,7 @@ export function RouteCard({
 }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pendingLogId, setPendingLogId] = useState<string | null>(null);
-  const destination = destinationByIata.get(route.destinationIata);
+  const destination = lookupDestination(route.destinationIata);
   const routeLogs = orderedLogs(logs, route.id);
   const lowest = lowestLoggedPrice(routeLogs);
   const latest = routeLogs[0];

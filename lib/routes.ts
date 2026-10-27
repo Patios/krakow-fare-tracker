@@ -1,4 +1,4 @@
-import { destinationByIata } from "./airports";
+import { lookupDestination } from "./network-refresh";
 import { roundMoney } from "./format";
 import type { Airline, PriceLog, SearchTrip, WatchedRoute } from "./types";
 
@@ -48,7 +48,7 @@ export function priceDrop(logsNewestFirst: PriceLog[]): PriceDrop | null {
 
 export function sortRoutes(routes: WatchedRoute[], logs: PriceLog[]): WatchedRoute[] {
   const label = (route: WatchedRoute) =>
-    destinationByIata.get(route.destinationIata)?.city ?? route.destinationIata;
+    lookupDestination(route.destinationIata)?.city ?? route.destinationIata;
 
   const ranked = [...routes].sort((a, b) => {
     const aPrice = lowestLoggedPrice(orderedLogs(logs, a.id));
@@ -87,7 +87,7 @@ export type RouteListFilter = {
 };
 
 export function matchesRouteFilter(route: WatchedRoute, logs: PriceLog[], filter: RouteListFilter): boolean {
-  const destination = destinationByIata.get(route.destinationIata);
+  const destination = lookupDestination(route.destinationIata);
   const served = destination?.airlines ?? [];
   const airlineOk =
     filter.airlines.length > 0 && (served.length === 0 || served.some((airline) => filter.airlines.includes(airline)));

@@ -1,9 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { AIRLINE_LABEL, destinationByIata, destinations } from "@/lib/airports";
 import { foldText } from "@/lib/format";
+import {
+  getNetworkServerSnapshot,
+  getNetworkSnapshot,
+  parseNetworkSnapshot,
+  subscribeNetwork,
+} from "@/lib/network-refresh";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -14,20 +20,29 @@ export function DestinationPicker({
   value: string;
   onChange: (iata: string) => void;
 }) {
-  const [query, setQuery] = useState(() => destinationByIata.get(value)?.city ?? "");
-  const selected = value ? destinationByIata.get(value) : undefined;
+  const networkRaw = useSyncExternalStore(subscribeNetwork, getNetworkSnapshot, getNetworkServerSnapshot);
+  const allDestinations = useMemo(() => {
+    const extras = (parseNetworkSnapshot(networkRaw)?.airports ?? [])
+      .filter((airport) => !destinationByIata.has(airport.iata))
+      .map((airport) => ({ ...airport, airport: airport.airport || airport.city, airlines: ["ryanair" as const] }));
+    return [...destinations, ...extras].sort(
+      (a, b) => a.city.localeCompare(b.city, "pl") || a.iata.localeCompare(b.iata),
+    );
+  }, [networkRaw]);
+  const [query, setQuery] = useState(() => allDestinations.find((destination) => destination.iata === value)?.city ?? "");
+  const selected = value ? allDestinations.find((destination) => destination.iata === value) : undefined;
   const foldedQuery = foldText(query.trim());
 
   const matches = useMemo(() => {
-    if (!foldedQuery) return destinations;
-    return destinations.filter((destination) => {
+    if (!foldedQuery) return allDestinations;
+    return allDestinations.filter((destination) => {
       const airlines = destination.airlines.map((airline) => AIRLINE_LABEL[airline]).join(" ");
       const haystack = foldText(
         `${destination.city} ${destination.airport} ${destination.country} ${destination.iata} ${airlines}`,
       );
       return haystack.includes(foldedQuery);
     });
-  }, [foldedQuery]);
+  }, [foldedQuery, allDestinations]);
 
   return (
     <div className="grid gap-2">
@@ -65,7 +80,7 @@ export function DestinationPicker({
         aria-controls="destination-list"
       />
       <p className="text-xs text-muted-foreground">
-        {matches.length} z {destinations.length}
+        {matches.length} z {allDestinations.length}
       </p>
       <ul
         id="destination-list"

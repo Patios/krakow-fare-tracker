@@ -1,4 +1,4 @@
-import { destinationByIata } from "./airports";
+import { lookupDestination } from "./network-refresh";
 import type { WatchedRoute } from "./types";
 
 export const AUTO_INTERVAL_HOURS = [1, 2, 4, 8, 12, 24] as const;
@@ -83,7 +83,7 @@ export function recordChecks(routeIds: string[], now: Date = new Date()) {
 }
 
 export function canAutoRefresh(route: WatchedRoute, today: string): boolean {
-  if (!destinationByIata.get(route.destinationIata)?.airlines.includes("ryanair")) return false;
+  if (!lookupDestination(route.destinationIata)?.airlines.includes("ryanair")) return false;
   const lastOutbound = route.outboundTo ?? route.outboundFrom;
   if (lastOutbound < today) return false;
   return route.returnDate == null || route.returnDate >= today;

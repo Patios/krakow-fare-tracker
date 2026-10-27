@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { destinationByIata } from "@/lib/airports";
+import { lookupDestination } from "@/lib/network-refresh";
 import { flightClock, isIsoDate, parseTimeInput } from "@/lib/format";
 import { normalizeTrip, orderedLogs, sameTrip } from "@/lib/routes";
 import type { PriceLog, WatchedRoute } from "@/lib/types";
@@ -48,7 +48,7 @@ export function EditRouteDialog({
   const [error, setError] = useState("");
   const [openPicker, setOpenPicker] = useState<TripDateField | null>(null);
   const pickerState = tripPickerState(openPicker, setOpenPicker);
-  const destination = destinationByIata.get(destinationIata);
+  const destination = lookupDestination(destinationIata);
   const specificDay = mode === "day" && isIsoDate(outboundFrom);
   const canCheckFlight = Boolean(destination) && specificDay;
   const flightDisabledReason = !destination
@@ -60,7 +60,7 @@ export function EditRouteDialog({
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!destinationByIata.has(destinationIata)) {
+    if (!lookupDestination(destinationIata)) {
       setError("Wybierz lotnisko z listy.");
       return;
     }

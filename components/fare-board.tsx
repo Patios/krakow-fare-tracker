@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AIRLINE_HOME_URL, AIRLINE_LABEL, ROUTE_LIST_AS_OF, destinationByIata } from "@/lib/airports";
+import { lookupDestination } from "@/lib/network-refresh";
 import {
   getCloudServerSnapshot,
   getCloudSnapshot,
@@ -86,6 +87,16 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
     setAddKey((value) => value + 1);
     setAddOpen(true);
   }, [initialDestination]);
+
+  useEffect(() => {
+    if (!initialDestinationIata || destinationByIata.has(initialDestinationIata)) return;
+    if (!lookupDestination(initialDestinationIata)) return;
+    if (seenDestination.current === initialDestinationIata) return;
+    seenDestination.current = initialDestinationIata;
+    setAddDestinationIata(initialDestinationIata);
+    setAddKey((value) => value + 1);
+    setAddOpen(true);
+  }, [initialDestinationIata]);
   const [logRouteId, setLogRouteId] = useState<string | null>(null);
   const [editRouteId, setEditRouteId] = useState<string | null>(null);
   const [editKey, setEditKey] = useState(0);
@@ -122,14 +133,14 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
     .filter((price): price is number => price != null);
   const drops = filtered.filter((route) => priceDrop(orderedLogs(ready?.logs ?? [], route.id))).length;
   const logRoute = ready?.routes.find((route) => route.id === logRouteId) ?? null;
-  const logDestination = logRoute ? destinationByIata.get(logRoute.destinationIata) : undefined;
+  const logDestination = logRoute ? lookupDestination(logRoute.destinationIata) : undefined;
   const checkRoute = ready?.routes.find((route) => route.id === check?.routeId) ?? null;
-  const checkDestination = checkRoute ? destinationByIata.get(checkRoute.destinationIata) : undefined;
+  const checkDestination = checkRoute ? lookupDestination(checkRoute.destinationIata) : undefined;
   const deleteRoute = ready?.routes.find((route) => route.id === deleteRouteId) ?? null;
   const editRoute = ready?.routes.find((route) => route.id === editRouteId) ?? null;
   const calendarRoute = ready?.routes.find((route) => route.id === calendarRouteId) ?? null;
   const ryanairRouteIds = filtered
-    .filter((route) => destinationByIata.get(route.destinationIata)?.airlines.includes("ryanair"))
+    .filter((route) => lookupDestination(route.destinationIata)?.airlines.includes("ryanair"))
     .map((route) => route.id);
   const autoCount = ready?.routes.filter((route) => route.autoRefresh === true).length ?? 0;
   const refreshingAll = ryanairRouteIds.length > 0 && ryanairRouteIds.every((id) => refreshing.has(id));
@@ -688,7 +699,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
             <DialogTitle>Usunąć tę trasę?</DialogTitle>
             <DialogDescription>
               {deleteRoute
-                ? `${destinationByIata.get(deleteRoute.destinationIata)?.city ?? deleteRoute.destinationIata} zniknie razem z historią cen${signedIn ? " z konta i z tej przeglądarki" : ". Zostaje to tylko w tej przeglądarce"}.`
+                ? `${lookupDestination(deleteRoute.destinationIata)?.city ?? deleteRoute.destinationIata} zniknie razem z historią cen${signedIn ? " z konta i z tej przeglądarki" : ". Zostaje to tylko w tej przeglądarce"}.`
                 : "Trasa zniknie razem z historią cen."}
             </DialogDescription>
           </DialogHeader>

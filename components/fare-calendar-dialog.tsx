@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { destinationByIata } from "@/lib/airports";
+import { lookupDestination } from "@/lib/network-refresh";
 import {
   cheapestDay,
   confirmLeg,
@@ -46,7 +46,7 @@ export function FareCalendarDialog({
 }) {
   const today = todayIso();
   const firstMonth = monthStart(today);
-  const destination = destinationByIata.get(route.destinationIata);
+  const destination = lookupDestination(route.destinationIata);
   const city = destination?.city ?? route.destinationIata;
   const hasReturn = route.returnDate != null;
   const rangeEnd = route.outboundTo ?? route.outboundFrom;
