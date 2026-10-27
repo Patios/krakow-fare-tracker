@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, MapPinned } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import type { Airline } from "@/lib/types";
 const color: Record<Airline, string> = { ryanair: "#ffd100", wizzair: "#c6007e" };
 
 export function ConnectionMap() {
+  const router = useRouter();
   const [enabledAirlines, setEnabledAirlines] = useState<Airline[]>(["ryanair", "wizzair"]);
   const [activeRouteIata, setActiveRouteIata] = useState<string | null>(null);
   const visibleRoutes = mappedRoutes.filter((route) =>
@@ -69,6 +71,7 @@ export function ConnectionMap() {
                   highlighted={activeRouteIata === route.iata}
                   dimmed={activeRouteIata != null && activeRouteIata !== route.iata}
                   onHover={setActiveRouteIata}
+                  onSelect={(iata) => router.push(`/?destination=${iata}`)}
                 />
               ))}
               <circle cx={krakowPoint.x} cy={krakowPoint.y} r="1.45" fill="#fff" stroke="#ffd100" strokeWidth=".6" />
@@ -135,20 +138,35 @@ function RouteLine({
   highlighted,
   dimmed,
   onHover,
+  onSelect,
 }: {
   route: (typeof mappedRoutes)[number];
   enabledAirlines: Airline[];
   highlighted: boolean;
   dimmed: boolean;
   onHover: (iata: string | null) => void;
+  onSelect: (iata: string) => void;
 }) {
   const visibleAirlines = route.airlines.filter((airline) => enabledAirlines.includes(airline));
   const hasBoth = visibleAirlines.length === 2;
   const stroke = hasBoth ? "url(#both-airlines)" : color[visibleAirlines[0]];
   const path = `M ${krakowPoint.x} ${krakowPoint.y} Q ${(krakowPoint.x + route.x) / 2} ${Math.min(krakowPoint.y, route.y) - 3} ${route.x} ${route.y}`;
   return (
-    <a href={`/?destination=${route.iata}`} aria-label={`Dodaj trasę do miasta ${route.city}`}>
-    <g onMouseEnter={() => onHover(route.iata)} onMouseLeave={() => onHover(null)} className="cursor-pointer">
+    <g
+      role="link"
+      tabIndex={0}
+      aria-label={`Dodaj trasę do miasta ${route.city}`}
+      onClick={() => onSelect(route.iata)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(route.iata);
+        }
+      }}
+      onMouseEnter={() => onHover(route.iata)}
+      onMouseLeave={() => onHover(null)}
+      className="cursor-pointer"
+    >
       <path d={path} fill="none" stroke="transparent" strokeWidth="2.5" />
       <path d={path} fill="none" stroke={stroke} strokeWidth={highlighted ? ".7" : ".28"} strokeOpacity={dimmed ? ".12" : highlighted ? "1" : ".7"} className="transition-all duration-150" />
       <g><title>{`${route.city} (${route.iata}), ${route.country}: ${visibleAirlines.map((airline) => AIRLINE_LABEL[airline]).join(" i ")}`}</title>
@@ -156,6 +174,5 @@ function RouteLine({
       </g>
       {highlighted ? <text x={route.x + 1.4} y={route.y - 1.2} fill="white" fontSize="1.9" fontWeight="700" paintOrder="stroke" stroke="#061936" strokeWidth=".8">{route.city}</text> : null}
     </g>
-    </a>
   );
 }
