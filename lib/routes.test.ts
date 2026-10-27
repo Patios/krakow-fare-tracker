@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AIRLINE_LABEL, RYANAIR_IATA, WIZZ_IATA, airlinesFor, destinationByIata, destinations } from "./airports";
 import { formatFlightTimes, parseAmount, parseTimeInput } from "./format";
-import { lowestLoggedPrice, orderedLogs, priceDrop, sortRoutes } from "./routes";
+import { lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "./routes";
 import { ryanairSearchUrl, wizzairSearchUrl } from "./search-urls";
 import { parseStore } from "./storage";
-import type { PriceLog, WatchedRoute } from "./types";
+import type { Airline, PriceLog, WatchedRoute } from "./types";
 
 const EXPECTED_RYANAIR =
   "ABZ AGA ALC BCN BRI BFS BHX BLQ BOH BRS CRL BUD BBU CAG DUB DBV EMA EDI EIN FAO FUE GDN GLA GOT LPA CTA CPH SUF LBA LIS LPL LTN STN MAD AGP MLA MAN RAK MRS BGY MXP FMM NAP NCL TRF PFO PMO BVA PSR PSA OPO PRG RBA RIX CIA SKG SVQ SNN SOF ARN TFS TIA TRS TLS VLC VCE VIE";
@@ -121,6 +121,29 @@ function log(partial: Partial<PriceLog> & Pick<PriceLog, "id" | "routeId" | "amo
     ...partial,
   };
 }
+
+test("the saved-route filter matches city, country, airline and a price drop", () => {
+  const routes = [
+    route({ id: "blq", destinationIata: "BLQ" }),
+    route({ id: "lgw", destinationIata: "LGW" }),
+    route({ id: "bcn", destinationIata: "BCN" }),
+  ];
+  const logs = [
+    log({ id: "old", routeId: "blq", amount: 200, checkedOn: "2026-10-20" }),
+    log({ id: "new", routeId: "blq", amount: 150, checkedOn: "2026-10-27" }),
+    log({ id: "lgw", routeId: "lgw", amount: 90, checkedOn: "2026-10-27" }),
+  ];
+  const all = { query: "", airlines: ["ryanair", "wizzair"] satisfies Airline[], dropsOnly: false };
+
+  assert.equal(matchesRouteFilter(routes[0], logs, { ...all, query: "wlochy" }), true);
+  assert.equal(matchesRouteFilter(routes[0], logs, { ...all, query: "blq" }), true);
+  assert.equal(matchesRouteFilter(routes[1], logs, { ...all, query: "bolonia" }), false);
+  assert.equal(matchesRouteFilter(routes[1], logs, { ...all, airlines: ["ryanair"] }), false);
+  assert.equal(matchesRouteFilter(routes[2], logs, { ...all, airlines: ["wizzair"] }), true);
+  assert.equal(matchesRouteFilter(routes[0], logs, { ...all, airlines: [] }), false);
+  assert.equal(matchesRouteFilter(routes[0], logs, { ...all, dropsOnly: true }), true);
+  assert.equal(matchesRouteFilter(routes[1], logs, { ...all, dropsOnly: true }), false);
+});
 
 test("routes sort by the lowest logged price and flag a drop against the previous log", () => {
   const routes = [

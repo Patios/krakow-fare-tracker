@@ -10,6 +10,7 @@ import { CheckFareDialog } from "@/components/check-fare-dialog";
 import { LogPriceDialog } from "@/components/log-price-dialog";
 import { RouteCard } from "@/components/route-card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ROUTE_LIST_AS_OF, destinationByIata } from "@/lib/airports";
+import { AIRLINE_HOME_URL, AIRLINE_LABEL, ROUTE_LIST_AS_OF, destinationByIata } from "@/lib/airports";
 import {
   getCloudServerSnapshot,
   getCloudSnapshot,
@@ -28,7 +29,7 @@ import {
   subscribeCloud,
 } from "@/lib/cloud";
 import { formatPln } from "@/lib/format";
-import { lowestLoggedPrice, orderedLogs, priceDrop, sortRoutes } from "@/lib/routes";
+import { lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "@/lib/routes";
 import {
   clearStore,
   getServerSnapshot,
@@ -60,15 +61,20 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const [checkKey, setCheckKey] = useState(0);
   const [deleteRouteId, setDeleteRouteId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [airlines, setAirlines] = useState<Airline[]>(["ryanair", "wizzair"]);
+  const [dropsOnly, setDropsOnly] = useState(false);
 
   const ready = view.status === "ready" ? view.data : null;
   const sorted = ready ? sortRoutes(ready.routes, ready.logs) : [];
-  const priced = sorted
+  const filtered = sorted.filter((route) =>
+    matchesRouteFilter(route, ready?.logs ?? [], { query, airlines, dropsOnly }),
+  );
+  const filterActive = query.trim() !== "" || airlines.length < 2 || dropsOnly;
+  const priced = filtered
     .map((route) => lowestLoggedPrice(orderedLogs(ready?.logs ?? [], route.id)))
     .filter((price): price is number => price != null);
-  const drops = ready
-    ? ready.routes.filter((route) => priceDrop(orderedLogs(ready.logs, route.id))).length
-    : 0;
+  const drops = filtered.filter((route) => priceDrop(orderedLogs(ready?.logs ?? [], route.id))).length;
   const logRoute = ready?.routes.find((route) => route.id === logRouteId) ?? null;
   const logDestination = logRoute ? destinationByIata.get(logRoute.destinationIata) : undefined;
   const checkRoute = ready?.routes.find((route) => route.id === check?.routeId) ?? null;
@@ -110,8 +116,18 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-6 sm:flex-row sm:items-end sm:justify-between sm:px-6 sm:py-8">
           <div className="max-w-2xl">
             <div className="flex items-center gap-2">
-              <AirlineMark airline="ryanair" />
-              <AirlineMark airline="wizzair" />
+              {(["ryanair", "wizzair"] as const).map((airline) => (
+                <a
+                  key={airline}
+                  href={AIRLINE_HOME_URL[airline]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Strona główna ${AIRLINE_LABEL[airline]}`}
+                  className="rounded-md transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  <AirlineMark airline={airline} />
+                </a>
+              ))}
               <p className="font-heading text-sm font-semibold tracking-[0.18em] text-ryanair-yellow uppercase">
                 KRK · Balice
               </p>
@@ -170,14 +186,39 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
 
         {ready && ready.routes.length > 0 ? (
           <section className="grid gap-4" aria-label="Obserwowane trasy">
-            <p className="text-sm text-muted-foreground">
-              {ready.routes.length} {routeWord(ready.routes.length)}
-              {priced.length > 0 ? ` · najtaniej ${formatPln(Math.min(...priced))}` : " · brak zapisanych cen"}
-              {drops > 0 ? ` · ${drops} ${drops === 1 ? "obniżka" : "obniżki"}` : ""}
-              . Od najniższej zapisanej ceny. Trasy bez wpisu są na końcu.
-            </p>
+            <RouteFilters
+              query={query}
+              airlines={airlines}
+              dropsOnly={dropsOnly}
+              onQueryChange={setQuery}
+              onToggleAirline={(airline) =>
+                setAirlines((current) =>
+                  current.includes(airline) ? current.filter((item) => item !== airline) : [...current, airline],
+                )
+              }
+              onToggleDrops={() => setDropsOnly((current) => !current)}
+              onClear={() => {
+                setQuery("");
+                setAirlines(["ryanair", "wizzair"]);
+                setDropsOnly(false);
+              }}
+            />
+            {filtered.length === 0 ? (
+              <p className="rounded-xl bg-card px-4 py-6 text-sm text-muted-foreground ring-1 ring-foreground/10">
+                Żadna zapisana trasa nie pasuje do filtra.
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {filterActive
+                  ? `${filtered.length} z ${ready.routes.length} ${routeWord(ready.routes.length)}`
+                  : `${ready.routes.length} ${routeWord(ready.routes.length)}`}
+                {priced.length > 0 ? ` · najtaniej ${formatPln(Math.min(...priced))}` : " · brak zapisanych cen"}
+                {drops > 0 ? ` · ${drops} ${drops === 1 ? "obniżka" : "obniżki"}` : ""}. Od najniższej zapisanej
+                ceny. Trasy bez wpisu są na końcu.
+              </p>
+            )}
             <div className="grid gap-4">
-              {sorted.map((route) => (
+              {filtered.map((route) => (
                 <RouteCard
                   key={route.id}
                   route={route}
@@ -341,6 +382,78 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function RouteFilters({
+  query,
+  airlines,
+  dropsOnly,
+  onQueryChange,
+  onToggleAirline,
+  onToggleDrops,
+  onClear,
+}: {
+  query: string;
+  airlines: Airline[];
+  dropsOnly: boolean;
+  onQueryChange: (query: string) => void;
+  onToggleAirline: (airline: Airline) => void;
+  onToggleDrops: () => void;
+  onClear: () => void;
+}) {
+  const active = query.trim() !== "" || airlines.length < 2 || dropsOnly;
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <label className="sr-only" htmlFor="route-filter">
+        Filtruj zapisane trasy
+      </label>
+      <Input
+        id="route-filter"
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        placeholder="Miasto, kraj lub kod"
+        className="h-10 bg-card sm:max-w-xs"
+      />
+      <div className="flex flex-wrap gap-2">
+        {(["ryanair", "wizzair"] as const).map((airline) => {
+          const pressed = airlines.includes(airline);
+          return (
+            <button
+              key={airline}
+              type="button"
+              aria-pressed={pressed}
+              onClick={() => onToggleAirline(airline)}
+              className={`inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors ${
+                pressed
+                  ? airline === "ryanair"
+                    ? "border-ryanair bg-secondary text-ryanair"
+                    : "border-wizz bg-wizz-soft text-wizz"
+                  : "border-border bg-card text-muted-foreground"
+              }`}
+            >
+              <AirlineMark airline={airline} className="size-5" />
+              {AIRLINE_LABEL[airline]}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          aria-pressed={dropsOnly}
+          onClick={onToggleDrops}
+          className={`inline-flex h-10 items-center rounded-lg border px-3 text-sm font-semibold transition-colors ${
+            dropsOnly ? "border-emerald-800 bg-emerald-800 text-white" : "border-border bg-card text-muted-foreground"
+          }`}
+        >
+          Tylko obniżki
+        </button>
+        {active ? (
+          <Button type="button" variant="ghost" className="h-10" onClick={onClear}>
+            Wyczyść
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

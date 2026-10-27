@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, MapPinned } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
 import { Button } from "@/components/ui/button";
-import { AIRLINE_LABEL, ROUTE_LIST_AS_OF } from "@/lib/airports";
+import { AIRLINE_HOME_URL, AIRLINE_LABEL, ROUTE_LIST_AS_OF } from "@/lib/airports";
 import { airlineRouteCount, krakowPoint, mappedRoutes } from "@/lib/route-map";
 import type { Airline } from "@/lib/types";
 
@@ -34,7 +34,7 @@ export function ConnectionMap() {
           <Link href="/" className="inline-flex items-center gap-2 text-sm font-medium text-white/80 transition-colors hover:text-white">
             <ArrowLeft className="size-4" /> Wróć do obserwowanych tras
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" aria-hidden>
             <AirlineMark airline="ryanair" className="size-7" />
             <AirlineMark airline="wizzair" className="size-7" />
           </div>
@@ -43,7 +43,21 @@ export function ConnectionMap() {
       <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8 sm:px-6 sm:py-10">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-ryanair-yellow"><MapPinned className="size-5" /><span className="font-heading text-sm font-semibold tracking-[0.18em] uppercase">KRK · Balice</span></div>
+            <div className="flex items-center gap-2">
+              {(["ryanair", "wizzair"] as const).map((airline) => (
+                <a
+                  key={airline}
+                  href={AIRLINE_HOME_URL[airline]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Strona główna ${AIRLINE_LABEL[airline]}`}
+                  className="rounded-md transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  <AirlineMark airline={airline} />
+                </a>
+              ))}
+              <span className="font-heading text-sm font-semibold tracking-[0.18em] text-ryanair-yellow uppercase">KRK · Balice</span>
+            </div>
             <h1 className="mt-2 font-heading text-4xl font-bold tracking-wide uppercase sm:text-5xl">Mapa połączeń</h1>
             <p className="mt-2 max-w-xl text-white/70">Regularne kierunki z Krakowa. Mapa pokazuje zasięg tras, a poniżej znajdziesz pełną, czytelną listę miast i przewoźników.</p>
           </div>

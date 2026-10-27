@@ -14,7 +14,7 @@ export function DestinationPicker({
   value: string;
   onChange: (iata: string) => void;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => destinationByIata.get(value)?.city ?? "");
   const selected = value ? destinationByIata.get(value) : undefined;
   const foldedQuery = foldText(query.trim());
 
@@ -55,7 +55,10 @@ export function DestinationPicker({
       <Input
         id="destination-search"
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          if (value) onChange("");
+        }}
         placeholder="Miasto, kraj albo kod IATA"
         autoComplete="off"
         className="h-10"
@@ -83,7 +86,10 @@ export function DestinationPicker({
                   type="button"
                   role="option"
                   aria-selected={selectedItem}
-                  onClick={() => onChange(destination.iata)}
+                  onClick={() => {
+                    onChange(destination.iata);
+                    setQuery(destination.city);
+                  }}
                   className={cn(
                     "flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-accent",
                     selectedItem && "bg-accent",

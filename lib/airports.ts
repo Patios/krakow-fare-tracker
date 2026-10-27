@@ -209,6 +209,11 @@ export const AIRLINE_LABEL: Record<Airline, string> = {
   wizzair: "Wizz Air",
 };
 
+export const AIRLINE_HOME_URL: Record<Airline, string> = {
+  ryanair: "https://www.ryanair.com/pl/pl",
+  wizzair: "https://www.wizzair.com/pl-pl",
+};
+
 function toDestination(iata: Iata): Destination {
   return {
     iata,

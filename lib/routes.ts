@@ -1,6 +1,6 @@
 import { destinationByIata } from "./airports";
 import { roundMoney } from "./format";
-import type { PriceLog, SearchTrip, WatchedRoute } from "./types";
+import type { Airline, PriceLog, SearchTrip, WatchedRoute } from "./types";
 
 export function orderedLogs(logs: PriceLog[], routeId: string): PriceLog[] {
   return logs
@@ -48,6 +48,31 @@ export function sortRoutes(routes: WatchedRoute[], logs: PriceLog[]): WatchedRou
     if (aPrice !== bPrice) return aPrice - bPrice;
     return label(a).localeCompare(label(b), "pl");
   });
+}
+
+export type RouteListFilter = {
+  query: string;
+  airlines: readonly Airline[];
+  dropsOnly: boolean;
+};
+
+export function matchesRouteFilter(route: WatchedRoute, logs: PriceLog[], filter: RouteListFilter): boolean {
+  const destination = destinationByIata.get(route.destinationIata);
+  const served = destination?.airlines ?? [];
+  const airlineOk =
+    filter.airlines.length > 0 && (served.length === 0 || served.some((airline) => filter.airlines.includes(airline)));
+  if (!airlineOk) return false;
+  if (filter.dropsOnly && !priceDrop(orderedLogs(logs, route.id))) return false;
+  const query = fold(filter.query.trim());
+  if (!query) return true;
+  const haystack = fold(
+    [destination?.city, destination?.airport, destination?.country, route.destinationIata].filter(Boolean).join(" "),
+  );
+  return haystack.includes(query);
+}
+
+function fold(value: string): string {
+  return value.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("pl").replace(/ł/g, "l");
 }
 
 export function sameTrip(a: SearchTrip & { destinationIata: string }, b: SearchTrip & { destinationIata: string }) {
