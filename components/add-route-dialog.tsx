@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { DestinationPicker } from "@/components/destination-picker";
+import { FlightDayCheck } from "@/components/flight-day-check";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -38,6 +39,15 @@ export function AddRouteDialog({
   const [hasReturn, setHasReturn] = useState(false);
   const [returnDate, setReturnDate] = useState("");
   const [error, setError] = useState("");
+  const destination = destinationByIata.get(destinationIata);
+  const specificDay = mode === "day" && isIsoDate(outboundFrom);
+  const canCheckFlight = Boolean(destination) && specificDay;
+  const flightDisabledReason = !destination
+    ? "Wybierz lotnisko i konkretny dzień wylotu, żeby sprawdzić lot."
+    : mode === "range"
+      ? "Sprawdzenie działa przy konkretnym dniu, nie przy zakresie."
+      : "Wybierz konkretny dzień wylotu, żeby sprawdzić lot.";
+  const returnDay = hasReturn && isIsoDate(returnDate) && returnDate >= outboundFrom ? returnDate : null;
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -177,6 +187,19 @@ export function AddRouteDialog({
               <p className="text-sm text-muted-foreground">Bez powrotu link otworzy lot w jedną stronę.</p>
             )}
           </div>
+
+          <FlightDayCheck
+            trip={{
+              destinationIata,
+              outboundFrom,
+              outboundTo: null,
+              returnDate: returnDay,
+            }}
+            airlines={destination?.airlines ?? []}
+            enabled={canCheckFlight}
+            disabledReason={canCheckFlight ? undefined : flightDisabledReason}
+            searchHint={false}
+          />
 
           {error ? (
             <p role="alert" className="text-sm text-destructive">

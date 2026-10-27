@@ -96,7 +96,17 @@ export function RouteCard({
           </div>
         </dl>
 
-        {destination ? <FlightDayCheck route={route} airlines={destination.airlines} /> : null}
+        {destination ? (
+          <FlightDayCheck
+            trip={{
+              destinationIata: route.destinationIata,
+              outboundFrom: route.outboundFrom,
+              outboundTo: route.outboundTo,
+              returnDate: route.returnDate,
+            }}
+            airlines={destination.airlines}
+          />
+        ) : null}
 
         {lowest == null || !latest ? (
           <p className="text-sm text-muted-foreground">Brak zapisanej ceny. Po sprawdzeniu u linii wpisz kwotę.</p>

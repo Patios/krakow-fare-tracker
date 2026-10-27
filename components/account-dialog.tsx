@@ -33,7 +33,7 @@ export function AccountDialog() {
   const [messageError, setMessageError] = useState(false);
   const [busy, setBusy] = useState(false);
   const signedIn = cloud.auth.status === "signed-in";
-  const accountEmail = signedIn ? cloud.auth.email : "";
+  const accountEmail = cloud.auth.status === "signed-in" ? cloud.auth.email : "";
   const recovery = cloud.auth.status === "signed-in" && cloud.auth.recovery;
 
   useEffect(() => {

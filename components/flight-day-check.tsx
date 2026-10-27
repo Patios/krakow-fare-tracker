@@ -4,15 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { AirlineMark } from "@/components/airline-mark";
 import { Button } from "@/components/ui/button";
 import { AIRLINE_LABEL } from "@/lib/airports";
-import { formatDate } from "@/lib/format";
+import { formatDate, isIsoDate } from "@/lib/format";
 import {
   MAX_FLIGHT_DAY_SPAN,
   checkRouteFlights,
   type FlightDay,
+  type FlightDayTrip,
   type FlightLegReport,
   type FlightReadFailure,
 } from "@/lib/flight-day";
-import type { Airline, WatchedRoute } from "@/lib/types";
+import type { Airline } from "@/lib/types";
 
 type CheckState = {
   signature: string;
@@ -21,10 +22,22 @@ type CheckState = {
   reports: FlightLegReport[] | null;
 };
 
-export function FlightDayCheck({ route, airlines }: { route: WatchedRoute; airlines: Airline[] }) {
+export function FlightDayCheck({
+  trip,
+  airlines,
+  enabled = true,
+  disabledReason,
+  searchHint = true,
+}: {
+  trip: FlightDayTrip;
+  airlines: Airline[];
+  enabled?: boolean;
+  disabledReason?: string;
+  searchHint?: boolean;
+}) {
   const [state, setState] = useState<CheckState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const signature = `${route.id}|${route.destinationIata}|${route.outboundFrom}|${route.outboundTo ?? ""}|${route.returnDate ?? ""}|${airlines.join(",")}`;
+  const signature = `${enabled}|${trip.destinationIata}|${trip.outboundFrom}|${trip.outboundTo ?? ""}|${trip.returnDate ?? ""}|${airlines.join(",")}`;
   const current = state?.signature === signature ? state : null;
   const pending = current?.pending ?? false;
   const failed = current?.failed ?? false;
@@ -41,7 +54,7 @@ export function FlightDayCheck({ route, airlines }: { route: WatchedRoute; airli
     const request = signature;
     setState({ signature: request, pending: true, failed: false, reports: null });
     try {
-      const next = await checkRouteFlights(route, airlines, fetch, controller.signal);
+      const next = await checkRouteFlights(trip, airlines, fetch, controller.signal);
       if (controller.signal.aborted) return;
       setState({ signature: request, pending: false, failed: false, reports: next });
     } catch (error) {
@@ -50,7 +63,12 @@ export function FlightDayCheck({ route, airlines }: { route: WatchedRoute; airli
     }
   }
 
-  if (airlines.length === 0) return null;
+  if (enabled && airlines.length === 0) return null;
+
+  const dayLabel = isIsoDate(trip.outboundFrom) ? formatDate(trip.outboundFrom) : "";
+  const ariaLabel = dayLabel
+    ? `Czy jest lot z KRK do ${trip.destinationIata}, ${dayLabel}`
+    : "Czy jest lot?";
 
   return (
     <div className="grid gap-2">
@@ -58,16 +76,18 @@ export function FlightDayCheck({ route, airlines }: { route: WatchedRoute; airli
         type="button"
         variant="outline"
         className="h-10 w-fit"
-        disabled={pending}
-        aria-label={`Czy jest lot z KRK do ${route.destinationIata}, ${formatDate(route.outboundFrom)}`}
+        disabled={!enabled || pending}
+        aria-label={ariaLabel}
         onClick={() => void run()}
       >
         {pending ? "Sprawdzam…" : "Czy jest lot?"}
       </Button>
 
+      {!enabled && disabledReason ? <p className="text-sm text-muted-foreground">{disabledReason}</p> : null}
+
       {pending ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Sprawdzam, czy linia sprzedaje lot w zapisanym dniu.
+          Sprawdzam, czy linia sprzedaje lot w tym dniu.
         </p>
       ) : null}
 
@@ -82,7 +102,9 @@ export function FlightDayCheck({ route, airlines }: { route: WatchedRoute; airli
           {reports.length === 0 ? (
             <p className="text-sm text-muted-foreground">Brak poprawnej daty wylotu.</p>
           ) : (
-            reports.map((report) => <LegResult key={`${report.airline}-${report.direction}`} report={report} />)
+            reports.map((report) => (
+              <LegResult key={`${report.airline}-${report.direction}`} report={report} searchHint={searchHint} />
+            ))
           )}
           <p className="text-sm text-muted-foreground">
             Wynik jest ze sprzedaży biletu u linii. To nie znaczy, że samolot na pewno wystartuje.
@@ -93,7 +115,7 @@ export function FlightDayCheck({ route, airlines }: { route: WatchedRoute; airli
   );
 }
 
-function LegResult({ report }: { report: FlightLegReport }) {
+function LegResult({ report, searchHint }: { report: FlightLegReport; searchHint: boolean }) {
   const direction = report.direction === "outbound" ? "Wylot" : "Powrót";
   return (
     <div className="grid gap-1">
@@ -102,7 +124,7 @@ function LegResult({ report }: { report: FlightLegReport }) {
         {AIRLINE_LABEL[report.airline]} · {direction} {report.origin} → {report.destination}
       </p>
       {report.failure ? (
-        <p className="text-sm text-muted-foreground">{failureCopy(report.airline, report.failure)}</p>
+        <p className="text-sm text-muted-foreground">{failureCopy(report.airline, report.failure, searchHint)}</p>
       ) : (
         <ul className="grid gap-0.5">
           {report.days.map((day) => (
@@ -147,10 +169,11 @@ function flightDetail(day: FlightDay): string {
     .join(", ");
 }
 
-function failureCopy(airline: Airline, failure: FlightReadFailure): string {
+function failureCopy(airline: Airline, failure: FlightReadFailure, searchHint: boolean): string {
   const label = AIRLINE_LABEL[airline];
   if (failure === "blocked") {
-    return `Przeglądarka nie pozwala odczytać rozkładu ${label} z tej strony. Ten dzień otworzysz przyciskiem „Sprawdź dziś”.`;
+    const blocked = `Przeglądarka nie pozwala odczytać rozkładu ${label} z tej strony.`;
+    return searchHint ? `${blocked} Ten dzień otworzysz przyciskiem „Sprawdź dziś”.` : blocked;
   }
   return `Rozkład ${label} nie odpowiedział.`;
 }
