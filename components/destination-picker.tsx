@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { AIRLINE_LABEL, destinationByIata, destinations } from "@/lib/airports";
 import { foldText } from "@/lib/format";
 import { Input } from "@/components/ui/input";
@@ -34,14 +35,20 @@ export function DestinationPicker({
         Kierunek
       </label>
       {selected ? (
-        <p className="rounded-lg bg-secondary px-3 py-2 text-sm">
-          <span className="font-medium">{selected.city}</span>
-          <span className="text-muted-foreground">
-            {" "}
-            · {selected.airport} · {selected.iata} ·{" "}
-            {selected.airlines.map((airline) => AIRLINE_LABEL[airline]).join(", ")}
-          </span>
-        </p>
+        <div className="rounded-lg bg-secondary px-3 py-2 text-sm">
+          <p>
+            <span className="font-medium text-ryanair">{selected.city}</span>
+            <span className="text-muted-foreground">
+              {" "}
+              · {selected.airport} · {selected.iata}
+            </span>
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {selected.airlines.map((airline) => (
+              <AirlineChip key={airline} airline={airline} />
+            ))}
+          </div>
+        </div>
       ) : (
         <p className="text-sm text-muted-foreground">Wybierz lotnisko z zimowego rozkładu.</p>
       )}
@@ -89,9 +96,16 @@ export function DestinationPicker({
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
-                    <span className="font-heading text-sm">{destination.iata}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {destination.airlines.map((airline) => AIRLINE_LABEL[airline]).join(" · ")}
+                    <span className="font-heading text-sm font-semibold tracking-wide text-ryanair">
+                      {destination.iata}
+                    </span>
+                    <span className="mt-1 flex justify-end gap-1">
+                      {destination.airlines.map((airline) => (
+                        <span key={airline} title={AIRLINE_LABEL[airline]} className="inline-flex">
+                          <AirlineMark airline={airline} className="size-5" />
+                          <span className="sr-only">{AIRLINE_LABEL[airline]}</span>
+                        </span>
+                      ))}
                     </span>
                   </span>
                 </button>

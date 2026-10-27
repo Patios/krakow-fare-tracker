@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { AIRLINE_LABEL, destinationByIata } from "@/lib/airports";
 import { formatDate, formatPln, formatTripDates, todayIso } from "@/lib/format";
 import { lowestLoggedPrice, orderedLogs, priceDrop } from "@/lib/routes";
 import { ryanairSearchUrl, wizzairSearchUrl, wizzRangeNote } from "@/lib/search-urls";
-import type { PriceLog, WatchedRoute } from "@/lib/types";
+import type { Airline, PriceLog, WatchedRoute } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -47,14 +48,15 @@ export function RouteCard({
     : [];
 
   return (
-    <Card className={cn(drop && "ring-emerald-700/30")}>
+    <Card className={cn("pt-0", drop && "ring-emerald-700/30")}>
+      <div aria-hidden className={cn("h-1.5 w-full", airlineStripe(destination?.airlines))} />
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs tracking-wide text-muted-foreground uppercase">
+            <p className="font-heading text-xs font-semibold tracking-[0.16em] text-ryanair uppercase">
               KRK → {route.destinationIata}
             </p>
-            <h2 className="font-heading text-2xl leading-tight font-medium">
+            <h2 className="font-heading text-2xl leading-tight font-semibold tracking-wide">
               {destination?.city ?? route.destinationIata}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -70,9 +72,7 @@ export function RouteCard({
         {destination ? (
           <div className="flex flex-wrap gap-1.5">
             {destination.airlines.map((airline) => (
-              <Badge key={airline} variant="outline">
-                {AIRLINE_LABEL[airline]}
-              </Badge>
+              <AirlineChip key={airline} airline={airline} />
             ))}
           </div>
         ) : null}
@@ -95,9 +95,13 @@ export function RouteCard({
         ) : (
           <div>
             <p className="text-xs tracking-wide text-muted-foreground uppercase">Najniższa zapisana</p>
-            <p className="font-heading text-4xl tabular-nums">{formatPln(lowest)}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Ostatnio {formatPln(latest.amount)} · {AIRLINE_LABEL[latest.airline]} · {formatDate(latest.checkedOn)}
+            <p className="font-heading text-4xl font-bold tracking-wide text-ryanair tabular-nums">{formatPln(lowest)}</p>
+            <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+              <span>Ostatnio {formatPln(latest.amount)}</span>
+              <AirlineMark airline={latest.airline} className="size-5" />
+              <span>
+                {AIRLINE_LABEL[latest.airline]} · {formatDate(latest.checkedOn)}
+              </span>
             </p>
             {drop ? (
               <p className="mt-1 text-sm text-emerald-800">
@@ -123,8 +127,15 @@ export function RouteCard({
             href={link.href}
             target="_blank"
             rel="noopener noreferrer"
-            className={cn(buttonVariants({ size: "lg" }), "h-10 px-3")}
+            className={cn(
+              buttonVariants({ size: "lg" }),
+              "h-10 gap-2 px-3 font-semibold",
+              link.airline === "ryanair"
+                ? "bg-ryanair-yellow text-ryanair hover:bg-ryanair-yellow/90"
+                : "bg-wizz text-white hover:bg-wizz/90",
+            )}
           >
+            <AirlineMark airline={link.airline} variant="glyph" />
             Sprawdź dziś · {link.label}
           </a>
         ))}
@@ -151,10 +162,12 @@ export function RouteCard({
                   className="flex flex-col gap-2 rounded-lg bg-muted/70 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
                 >
                   <span>
-                    <span className="font-medium tabular-nums">{formatPln(entry.amount)}</span>
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · {AIRLINE_LABEL[entry.airline]} · {formatDate(entry.checkedOn)}
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                      <span className="font-medium tabular-nums">{formatPln(entry.amount)}</span>
+                      <AirlineMark airline={entry.airline} className="size-5" />
+                      <span className="text-muted-foreground">
+                        {AIRLINE_LABEL[entry.airline]} · {formatDate(entry.checkedOn)}
+                      </span>
                     </span>
                   </span>
                   {pendingLogId === entry.id ? (
@@ -179,4 +192,10 @@ export function RouteCard({
       ) : null}
     </Card>
   );
+}
+
+function airlineStripe(airlines: Airline[] | undefined) {
+  if (!airlines || airlines.length === 0) return "bg-border";
+  if (airlines.length > 1) return "bg-linear-to-r from-ryanair-yellow to-wizz";
+  return airlines[0] === "wizzair" ? "bg-wizz" : "bg-ryanair-yellow";
 }

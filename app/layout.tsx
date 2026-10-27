@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { Fraunces, Source_Sans_3 } from "next/font/google";
+import { Barlow_Condensed, Outfit } from "next/font/google";
 import "./globals.css";
 
-const sourceSans = Source_Sans_3({
+const outfit = Outfit({
   subsets: ["latin", "latin-ext"],
-  variable: "--font-source-sans",
+  variable: "--font-outfit",
 });
 
-const fraunces = Fraunces({
+const barlow = Barlow_Condensed({
   subsets: ["latin", "latin-ext"],
-  variable: "--font-fraunces",
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
 });
 
 export const metadata: Metadata = {
@@ -22,7 +23,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="pl"
-      className={`${sourceSans.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${outfit.variable} ${barlow.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
