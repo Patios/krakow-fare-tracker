@@ -539,13 +539,27 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
           </section>
         ) : null}
 
-        <footer className="mt-auto border-t border-border pt-4 text-sm text-muted-foreground">
-          „Odśwież ceny” pobiera z Ryanair najtańszy bilet w zapisanym dniu albo zakresie. Przy powrocie cena to suma
-          dwóch biletów w jedną stronę, bez bagażu i opłat dodatkowych. Ceny Wizz Air wpisujesz sam, bo Wizz Air
-          blokuje odczyt z przeglądarki. „Czy jest lot?” tylko sprawdza, czy linia sprzedaje połączenie w zapisanym
-          dniu. Aplikacja nie loguje się do Ryanair ani Wizz Air.
-          Kierunki: informator połączeń regularnych Kraków Airport, zima 2026/27, stan na{" "}
-          <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>. Tylko Ryanair i Wizz Air.
+        <footer className="mt-auto space-y-3 border-t border-border pt-4 text-sm text-muted-foreground">
+          <p>
+            „Odśwież ceny” pobiera z Ryanair najtańszy bilet w zapisanym dniu albo zakresie. Przy powrocie cena to suma
+            dwóch biletów w jedną stronę, bez bagażu i opłat dodatkowych. Ceny Wizz Air wpisujesz sam, bo Wizz Air
+            blokuje odczyt z przeglądarki. „Czy jest lot?” tylko sprawdza, czy linia sprzedaje połączenie w zapisanym
+            dniu. Aplikacja nie loguje się do Ryanair ani Wizz Air.
+            Kierunki: informator połączeń regularnych Kraków Airport, zima 2026/27, stan na{" "}
+            <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>. Tylko Ryanair i Wizz Air.
+          </p>
+          <p>
+            Jeśli strona się przydaje, możesz{" "}
+            <a
+              href="https://buycoffee.to/patios"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+            >
+              postawić autorowi kawę
+            </a>
+            .
+          </p>
         </footer>
       </main>
 
