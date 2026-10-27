@@ -3,7 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ArrowLeft, RefreshCw, Snowflake, Sun } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   getNetworkSnapshot,
   loadRyanairNetwork,
   parseNetworkSnapshot,
+  routeSeason,
   saveNetwork,
   subscribeNetwork,
 } from "@/lib/network-refresh";
@@ -173,7 +174,7 @@ export function ConnectionMap() {
         <section className="mt-7" aria-labelledby="destinations-heading">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
             <h2 id="destinations-heading" className="font-heading text-2xl font-semibold tracking-wide uppercase">Kierunki z Krakowa</h2>
-            <p className="text-sm text-white/60">{visibleRoutes.length} z {mappedRoutes.length} miast · kolory odpowiadają filtrom</p>
+            <p className="text-sm text-white/60">{visibleRoutes.length} z {live.routes.length} miast · słoneczko to sezon letni, śnieg to sezon zimowy</p>
           </div>
           <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-label="Lista miast docelowych">
             {visibleRoutes.map((route) => (
@@ -184,7 +185,13 @@ export function ConnectionMap() {
                   onMouseEnter={() => setActiveRouteIata(route.iata)}
                   onMouseLeave={() => setActiveRouteIata(null)}
                 >
-                  <span className="min-w-0"><span className="block truncate font-medium text-white">{route.city}{newIatas.has(route.iata) ? " · nowy" : ""}</span><span className="block truncate text-xs text-white/55">{route.country} · {route.iata}</span></span>
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 truncate font-medium text-white">
+                      <span className="truncate">{route.city}{newIatas.has(route.iata) ? " · nowy" : ""}</span>
+                      <SeasonMarks iata={route.iata} network={network} />
+                    </span>
+                    <span className="block truncate text-xs text-white/55">{route.country} · {route.iata}</span>
+                  </span>
                   <span className="flex shrink-0 gap-1" aria-label={route.airlines.map((airline) => AIRLINE_LABEL[airline]).join(" i ")}>
                     {route.airlines.filter((airline) => enabledAirlines.includes(airline)).map((airline) => <span key={airline} className="size-2.5 rounded-full" style={{ backgroundColor: color[airline] }} />)}
                   </span>
@@ -208,7 +215,7 @@ export function ConnectionMap() {
               </>
             ) : (
               <>
-                Stan siatki połączeń: <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>. „Odśwież siatkę” pyta Ryanair o bilety na najbliższe 6 miesięcy.
+                Stan siatki połączeń: <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>. Śnieg oznacza sezon zimowy. „Odśwież siatkę” dopytuje Ryanair o sezon letni.
               </>
             )}
           </p>
@@ -216,6 +223,27 @@ export function ConnectionMap() {
         </div>
       </main>
     </div>
+  );
+}
+
+function SeasonMarks({ iata, network }: { iata: string; network: ReturnType<typeof parseNetworkSnapshot> }) {
+  const season = routeSeason(iata, network);
+  if (!season.summer && !season.winter) return null;
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1">
+      {season.summer ? (
+        <span title="Sezon letni">
+          <Sun className="size-3.5 text-ryanair-yellow" aria-hidden />
+          <span className="sr-only">trasa letnia</span>
+        </span>
+      ) : null}
+      {season.winter ? (
+        <span title="Sezon zimowy">
+          <Snowflake className="size-3.5 text-sky-200" aria-hidden />
+          <span className="sr-only">trasa zimowa</span>
+        </span>
+      ) : null}
+    </span>
   );
 }
 

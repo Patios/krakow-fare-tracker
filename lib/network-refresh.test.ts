@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RYANAIR_IATA } from "./airports";
-import { loadRyanairNetwork, parseRyanairNetwork, ryanairNetworkUrl } from "./network-refresh";
+import { loadRyanairNetwork, parseRyanairNetwork, routeSeason, ryanairNetworkUrl } from "./network-refresh";
 import { withLiveRyanair } from "./route-map";
 
 function fare(iata: string, city: string, country: string) {
@@ -51,13 +51,18 @@ test("new airports with coordinates join the map and the winter guide stays", ()
 });
 
 test("the loader reports airports added to and missing from the winter guide", async () => {
-  const sample = RYANAIR_IATA.filter((iata) => iata !== "VIE").map((iata) => fare(iata, iata, "Poland"));
-  sample.push(fare("PMI", "Palma", "Spain"));
-  const fetchImpl = async () => new Response(JSON.stringify({ fares: sample }));
+  const winter = RYANAIR_IATA.filter((iata) => iata !== "VIE").map((iata) => fare(iata, iata, "Poland"));
+  const summer = [fare("AGP", "Malaga", "Spain"), fare("PMI", "Palma", "Spain")];
+  const fetchImpl = async (url: string) =>
+    new Response(JSON.stringify({ fares: url.includes("2027-03-28") ? summer : winter }));
   const result = await loadRyanairNetwork("2026-10-27", fetchImpl, undefined, new Date("2026-10-27T18:00:00Z"));
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.deepEqual(result.added.map((airport) => airport.iata), ["PMI"]);
   assert.deepEqual(result.missing, ["VIE"]);
-  assert.equal(result.snapshot.through, "2027-04-25");
+  assert.equal(result.snapshot.through, "2027-10-30");
+  assert.deepEqual(routeSeason("AGP", result.snapshot), { winter: true, summer: true });
+  assert.deepEqual(routeSeason("PMI", result.snapshot), { winter: false, summer: true });
+  assert.deepEqual(routeSeason("VIE", result.snapshot), { winter: true, summer: false });
+  assert.deepEqual(routeSeason("AGP", null), { winter: true, summer: false });
 });

@@ -13,10 +13,18 @@ export type NetworkAirport = {
   country: string;
 };
 
+/** IATA northern winter 2026/27 ends the day before the summer season. */
+export const WINTER_SEASON_END = "2027-03-27";
+export const SUMMER_SEASON_START = "2027-03-28";
+export const SUMMER_SEASON_END = "2027-10-30";
+
 export type NetworkSnapshot = {
   checkedAt: string;
   through: string;
   airports: NetworkAirport[];
+  /** Set after a refresh that asked Ryanair about each season. Missing on older saved results. */
+  winterIata?: string[];
+  summerIata?: string[];
 };
 
 export type NetworkLoad =
@@ -115,7 +123,13 @@ export function parseNetworkSnapshot(raw: string): NetworkSnapshot | null {
       ...airport,
       airport: airport.airport || airport.city,
     }));
-    return airports.length > 0 ? { checkedAt: value.checkedAt, through: value.through, airports } : null;
+    if (airports.length === 0) return null;
+    const snapshot: NetworkSnapshot = { checkedAt: value.checkedAt, through: value.through, airports };
+    if (Array.isArray(value.winterIata) && Array.isArray(value.summerIata)) {
+      snapshot.winterIata = value.winterIata.filter(isIata);
+      snapshot.summerIata = value.summerIata.filter(isIata);
+    }
+    return snapshot;
   } catch {
     return null;
   }
@@ -152,13 +166,37 @@ export function networkExtras(): Destination[] {
     .sort((a, b) => a.city.localeCompare(b.city, "pl"));
 }
 
-export function ryanairNetworkUrl(from: string): string | null {
+export function seasonRanges(today: string): {
+  winter: { from: string; to: string } | null;
+  summer: { from: string; to: string } | null;
+} {
+  if (!isIsoDate(today)) return { winter: null, summer: null };
+  const winterFrom = today < "2026-10-25" ? "2026-10-25" : today;
+  const summerFrom = today > SUMMER_SEASON_START ? today : SUMMER_SEASON_START;
+  return {
+    winter: winterFrom <= WINTER_SEASON_END ? { from: winterFrom, to: WINTER_SEASON_END } : null,
+    summer: summerFrom <= SUMMER_SEASON_END ? { from: summerFrom, to: SUMMER_SEASON_END } : null,
+  };
+}
+
+/** Snow for the winter schedule, sun for the summer schedule. A year-round route has both. */
+export function routeSeason(iata: string, network: NetworkSnapshot | null): { summer: boolean; winter: boolean } {
+  const inWinterGuide = destinationByIata.has(iata);
+  if (!network?.winterIata || !network.summerIata) return { winter: inWinterGuide, summer: false };
+  return {
+    winter: inWinterGuide || network.winterIata.includes(iata),
+    summer: network.summerIata.includes(iata),
+  };
+}
+
+export function ryanairNetworkUrl(from: string, to?: string): string | null {
   if (!isIsoDate(from)) return null;
-  const to = addIsoDays(from, NETWORK_WINDOW_DAYS);
+  const end = to ?? addIsoDays(from, NETWORK_WINDOW_DAYS);
+  if (!isIsoDate(end) || end < from) return null;
   const params = new URLSearchParams({
     departureAirportIataCode: "KRK",
     outboundDepartureDateFrom: from,
-    outboundDepartureDateTo: to,
+    outboundDepartureDateTo: end,
     currency: "PLN",
   });
   return `https://www.ryanair.com/api/farfnd/v4/oneWayFares?${params.toString()}`;
@@ -195,14 +233,25 @@ export async function loadRyanairNetwork(
   signal?: AbortSignal,
   now: Date = new Date(),
 ): Promise<NetworkLoad> {
-  const url = ryanairNetworkUrl(today);
-  if (!url) return { ok: false, reason: "unreadable" };
-  const read = await readJson(url, fetchImpl, signal);
-  if (!read.ok) return read;
-  const airports = parseRyanairNetwork(read.payload);
-  if (!airports || airports.length === 0) return { ok: false, reason: "unreadable" };
-  const snapshot = { checkedAt: now.toISOString(), through: addIsoDays(today, NETWORK_WINDOW_DAYS), airports };
-  const live = new Set(airports.map((airport) => airport.iata));
+  const ranges = seasonRanges(today);
+  if (!ranges.winter && !ranges.summer) return { ok: false, reason: "unreadable" };
+  const [winterAirports, summerAirports] = await Promise.all([
+    ranges.winter ? readSeason(ranges.winter.from, ranges.winter.to, fetchImpl, signal) : Promise.resolve([] as NetworkAirport[]),
+    ranges.summer ? readSeason(ranges.summer.from, ranges.summer.to, fetchImpl, signal) : Promise.resolve([] as NetworkAirport[]),
+  ]);
+  if (winterAirports === null || summerAirports === null) {
+    return { ok: false, reason: winterAirports === null && summerAirports === null ? "blocked" : "unreadable" };
+  }
+  const airports = mergeAirports(winterAirports, summerAirports);
+  if (airports.length === 0) return { ok: false, reason: "unreadable" };
+  const snapshot: NetworkSnapshot = {
+    checkedAt: now.toISOString(),
+    through: ranges.summer?.to ?? ranges.winter?.to ?? today,
+    airports,
+    winterIata: winterAirports.map((airport) => airport.iata).sort(),
+    summerIata: summerAirports.map((airport) => airport.iata).sort(),
+  };
+  const live = new Set(snapshot.winterIata);
   const guide = new Set<string>(RYANAIR_IATA);
   return {
     ok: true,
@@ -210,6 +259,31 @@ export async function loadRyanairNetwork(
     added: airports.filter((airport) => !guide.has(airport.iata)),
     missing: RYANAIR_IATA.filter((iata) => !live.has(iata)),
   };
+}
+
+async function readSeason(
+  from: string,
+  to: string,
+  fetchImpl: FlightFetch,
+  signal?: AbortSignal,
+): Promise<NetworkAirport[] | null> {
+  const url = ryanairNetworkUrl(from, to);
+  if (!url) return null;
+  const read = await readJson(url, fetchImpl, signal);
+  if (!read.ok) return null;
+  return parseRyanairNetwork(read.payload);
+}
+
+function mergeAirports(winter: NetworkAirport[], summer: NetworkAirport[]): NetworkAirport[] {
+  const byIata = new Map<string, NetworkAirport>();
+  for (const airport of [...winter, ...summer]) {
+    if (!byIata.has(airport.iata)) byIata.set(airport.iata, airport);
+  }
+  return [...byIata.values()];
+}
+
+function isIata(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Z]{3}$/.test(value);
 }
 
 function namedAirport(iata: string, apiCity: string, apiAirport: string, apiCountry: string): NetworkAirport {
