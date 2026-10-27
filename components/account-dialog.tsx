@@ -53,7 +53,8 @@ export function AccountDialog() {
     if (result.error) show(result.error, true);
     else {
       setPassword("");
-      show(result.notice ?? "Zalogowano.");
+      setMessage(null);
+      setOpen(false);
     }
   }
 
