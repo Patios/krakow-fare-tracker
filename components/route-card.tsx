@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { AIRLINE_LABEL, destinationByIata } from "@/lib/airports";
-import { formatDate, formatPln, formatTripDates, todayIso } from "@/lib/format";
+import { formatDate, formatFlightTimes, formatPln, formatTripDates, todayIso } from "@/lib/format";
 import { lowestLoggedPrice, orderedLogs, priceDrop } from "@/lib/routes";
+import { openAirlineWindow } from "@/lib/airline-window";
 import { ryanairSearchUrl, wizzairSearchUrl, wizzRangeNote } from "@/lib/search-urls";
 import type { Airline, PriceLog, WatchedRoute } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -16,12 +17,14 @@ export function RouteCard({
   route,
   logs,
   onLogPrice,
+  onCheck,
   onDeleteRoute,
   onDeleteLog,
 }: {
   route: WatchedRoute;
   logs: PriceLog[];
   onLogPrice: () => void;
+  onCheck: (check: { airline: Airline; href: string; blocked: boolean }) => void;
   onDeleteRoute: () => void;
   onDeleteLog: (logId: string) => void;
 }) {
@@ -101,6 +104,7 @@ export function RouteCard({
               <AirlineMark airline={latest.airline} className="size-5" />
               <span>
                 {AIRLINE_LABEL[latest.airline]} · {formatDate(latest.checkedOn)}
+                {formatFlightTimes(latest) ? ` · ${formatFlightTimes(latest)}` : ""}
               </span>
             </p>
             {drop ? (
@@ -122,22 +126,23 @@ export function RouteCard({
 
       <CardFooter className="flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap">
         {links.map((link) => (
-          <a
+          <Button
             key={link.airline}
-            href={link.href}
-            target="_blank"
-            rel="noopener noreferrer"
+            type="button"
             className={cn(
-              buttonVariants({ size: "lg" }),
               "h-10 gap-2 px-3 font-semibold",
               link.airline === "ryanair"
                 ? "bg-ryanair-yellow text-ryanair hover:bg-ryanair-yellow/90"
                 : "bg-wizz text-white hover:bg-wizz/90",
             )}
+            onClick={() => {
+              const opened = openAirlineWindow(link.href, link.airline);
+              onCheck({ airline: link.airline, href: link.href, blocked: !opened });
+            }}
           >
             <AirlineMark airline={link.airline} variant="glyph" />
             Sprawdź dziś · {link.label}
-          </a>
+          </Button>
         ))}
         <Button type="button" variant="outline" className="h-10" onClick={onLogPrice} disabled={!destination}>
           Zapisz cenę
@@ -167,6 +172,7 @@ export function RouteCard({
                       <AirlineMark airline={entry.airline} className="size-5" />
                       <span className="text-muted-foreground">
                         {AIRLINE_LABEL[entry.airline]} · {formatDate(entry.checkedOn)}
+                        {formatFlightTimes(entry) ? ` · ${formatFlightTimes(entry)}` : ""}
                       </span>
                     </span>
                   </span>

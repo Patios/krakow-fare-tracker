@@ -1,5 +1,5 @@
 import type { Airline, PriceLog, StoreData, WatchedRoute } from "./types";
-import { isIsoDate } from "./format";
+import { isIsoDate, parseTimeInput } from "./format";
 
 export const STORAGE_KEY = "krk-fare-tracker.v1";
 
@@ -90,6 +90,18 @@ function readLog(value: unknown): PriceLog | null {
   if (log.currency !== "PLN") return null;
   if (typeof log.checkedOn !== "string" || !isIsoDate(log.checkedOn)) return null;
   if (typeof log.createdAt !== "string" || log.createdAt.length === 0) return null;
+  const outboundDepart = readOptionalTime(log.outboundDepart);
+  const outboundArrive = readOptionalTime(log.outboundArrive);
+  const returnDepart = readOptionalTime(log.returnDepart);
+  const returnArrive = readOptionalTime(log.returnArrive);
+  if (
+    outboundDepart === "invalid" ||
+    outboundArrive === "invalid" ||
+    returnDepart === "invalid" ||
+    returnArrive === "invalid"
+  ) {
+    return null;
+  }
   return {
     id: log.id,
     routeId: log.routeId,
@@ -98,7 +110,17 @@ function readLog(value: unknown): PriceLog | null {
     currency: "PLN",
     checkedOn: log.checkedOn,
     createdAt: log.createdAt,
+    outboundDepart,
+    outboundArrive,
+    returnDepart,
+    returnArrive,
   };
+}
+
+function readOptionalTime(value: unknown): string | null | "invalid" {
+  if (value == null || value === "") return null;
+  if (typeof value !== "string") return "invalid";
+  return parseTimeInput(value);
 }
 
 export function parseStore(raw: string): StoreData {

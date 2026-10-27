@@ -2,7 +2,7 @@
 
 Aplikacja do pilnowania cen Ryanair i Wizz Air na trasach z Krakowa (KRK).
 
-Dla każdej trasy buduje gotowy adres wyszukiwania. „Sprawdź dziś” otwiera stronę przewoźnika z lotniskiem i datami. Cenę, którą zobaczysz, wpisujesz sam. Historia zostaje w `localStorage` tej przeglądarki. Nie ma backendu, bazy ani logowania. Aplikacja nie pobiera taryf ze stron linii.
+Dla każdej trasy buduje gotowy adres wyszukiwania. „Sprawdź dziś” otwiera stronę przewoźnika z lotniskiem i datami. Cenę i godziny lotu, które zobaczysz, wpisujesz sam. Historia zostaje w `localStorage` tej przeglądarki. Nie ma backendu, bazy ani logowania. Aplikacja nie pobiera taryf ani rozkładu ze stron linii.
 
 ## Uruchomienie
 

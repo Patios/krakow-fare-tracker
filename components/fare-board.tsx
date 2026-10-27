@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
+import Link from "next/link";
+import { MapPinned } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
 import { AddRouteDialog } from "@/components/add-route-dialog";
+import { CheckFareDialog } from "@/components/check-fare-dialog";
 import { LogPriceDialog } from "@/components/log-price-dialog";
 import { RouteCard } from "@/components/route-card";
 import { Button } from "@/components/ui/button";
@@ -26,7 +29,7 @@ import {
   saveStore,
   subscribe,
 } from "@/lib/storage";
-import type { StoreData } from "@/lib/types";
+import type { Airline, PriceDraft, StoreData } from "@/lib/types";
 
 export function FareBoard() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
@@ -35,6 +38,13 @@ export function FareBoard() {
   const [addKey, setAddKey] = useState(0);
   const [logRouteId, setLogRouteId] = useState<string | null>(null);
   const [logKey, setLogKey] = useState(0);
+  const [check, setCheck] = useState<{
+    routeId: string;
+    airline: Airline;
+    href: string;
+    blocked: boolean;
+  } | null>(null);
+  const [checkKey, setCheckKey] = useState(0);
   const [deleteRouteId, setDeleteRouteId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -48,6 +58,8 @@ export function FareBoard() {
     : 0;
   const logRoute = ready?.routes.find((route) => route.id === logRouteId) ?? null;
   const logDestination = logRoute ? destinationByIata.get(logRoute.destinationIata) : undefined;
+  const checkRoute = ready?.routes.find((route) => route.id === check?.routeId) ?? null;
+  const checkDestination = checkRoute ? destinationByIata.get(checkRoute.destinationIata) : undefined;
   const deleteRoute = ready?.routes.find((route) => route.id === deleteRouteId) ?? null;
 
   function commit(next: StoreData) {
@@ -94,9 +106,14 @@ export function FareBoard() {
               przeglądarce.
             </p>
           </div>
-          <Button type="button" className="h-10 font-semibold" onClick={openAdd} disabled={!ready}>
-            Dodaj trasę
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button nativeButton={false} render={<Link href="/mapa-polaczen" />} variant="outline" className="h-10 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white">
+              <MapPinned /> Mapa połączeń
+            </Button>
+            <Button type="button" className="h-10 font-semibold" onClick={openAdd} disabled={!ready}>
+              Dodaj trasę
+            </Button>
+          </div>
         </div>
       </header>
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -145,6 +162,10 @@ export function FareBoard() {
                   onLogPrice={() => {
                     setLogKey((value) => value + 1);
                     setLogRouteId(route.id);
+                  }}
+                  onCheck={(session) => {
+                    setCheckKey((value) => value + 1);
+                    setCheck({ routeId: route.id, ...session });
                   }}
                   onDeleteRoute={() => setDeleteRouteId(route.id)}
                   onDeleteLog={(logId) =>
@@ -197,6 +218,7 @@ export function FareBoard() {
           open
           city={`${logDestination.city} (${logDestination.iata})`}
           airlines={logDestination.airlines}
+          hasReturn={logRoute.returnDate != null}
           onOpenChange={(open) => {
             if (!open) setLogRouteId(null);
           }}
@@ -213,11 +235,51 @@ export function FareBoard() {
                   amount: entry.amount,
                   currency: "PLN",
                   checkedOn: entry.checkedOn,
+                  outboundDepart: entry.outboundDepart,
+                  outboundArrive: entry.outboundArrive,
+                  returnDepart: entry.returnDepart,
+                  returnArrive: entry.returnArrive,
                   createdAt: new Date().toISOString(),
                 },
               ],
             });
           }}
+        />
+      ) : null}
+
+      {ready && check && checkRoute && checkDestination ? (
+        <CheckFareDialog
+          key={checkKey}
+          route={checkRoute}
+          city={`${checkDestination.city} (${checkDestination.iata})`}
+          airline={check.airline}
+          href={check.href}
+          logs={ready.logs}
+          popupBlocked={check.blocked}
+          onOpenChange={(open) => {
+            if (!open) setCheck(null);
+          }}
+          onSave={(entry) =>
+            commit({
+              routes: ready.routes,
+              logs: [
+                ...ready.logs,
+                {
+                  id: crypto.randomUUID(),
+                  routeId: checkRoute.id,
+                  airline: entry.airline,
+                  amount: entry.amount,
+                  currency: "PLN",
+                  checkedOn: entry.checkedOn,
+                  outboundDepart: entry.outboundDepart,
+                  outboundArrive: entry.outboundArrive,
+                  returnDepart: entry.returnDepart,
+                  returnArrive: entry.returnArrive,
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+            })
+          }
         />
       ) : null}
 
@@ -291,8 +353,8 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       </div>
       <h2 className="font-heading text-2xl font-medium">Nie obserwujesz jeszcze żadnej trasy</h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-        Dodaj kierunek z Krakowa. „Sprawdź dziś” otworzy wyszukiwarkę Ryanair albo Wizz Air z lotniskiem
-        i datami. Cenę, którą zobaczysz, wpiszesz tutaj.
+        Dodaj kierunek z Krakowa. „Sprawdź dziś” otworzy wyszukiwarkę linii w osobnym oknie i formularz
+        zapisu ceny. Kwota trafia od razu do historii w tej przeglądarce.
       </p>
       <Button type="button" className="mt-5 h-10" onClick={onAdd}>
         Dodaj trasę

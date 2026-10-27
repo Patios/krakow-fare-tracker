@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AIRLINE_LABEL, RYANAIR_IATA, WIZZ_IATA, airlinesFor, destinationByIata, destinations } from "./airports";
-import { parseAmount } from "./format";
+import { formatFlightTimes, parseAmount, parseTimeInput } from "./format";
 import { lowestLoggedPrice, orderedLogs, priceDrop, sortRoutes } from "./routes";
 import { ryanairSearchUrl, wizzairSearchUrl } from "./search-urls";
 import { parseStore } from "./storage";
@@ -114,6 +114,10 @@ function log(partial: Partial<PriceLog> & Pick<PriceLog, "id" | "routeId" | "amo
     airline: "ryanair",
     currency: "PLN",
     createdAt: `${partial.checkedOn}T12:00:00.000Z`,
+    outboundDepart: null,
+    outboundArrive: null,
+    returnDepart: null,
+    returnArrive: null,
     ...partial,
   };
 }
@@ -160,6 +164,57 @@ test("amount parsing accepts Polish zloty input", () => {
   assert.equal(parseAmount("0"), null);
   assert.equal(parseAmount("-5"), null);
   assert.equal(parseAmount("12,345"), null);
+});
+
+test("flight times are optional and stay with the logged price", () => {
+  assert.equal(parseTimeInput(""), null);
+  assert.equal(parseTimeInput("06:40"), "06:40");
+  assert.equal(parseTimeInput("06:40:00"), "06:40");
+  assert.equal(parseTimeInput("24:00"), "invalid");
+  assert.equal(parseTimeInput("6:40"), "invalid");
+
+  const timed = log({
+    id: "timed",
+    routeId: "r",
+    amount: 99,
+    checkedOn: "2026-10-27",
+    outboundDepart: "06:40",
+    outboundArrive: "09:15",
+    returnDepart: "18:20",
+    returnArrive: "20:55",
+  });
+  assert.equal(formatFlightTimes(timed), "wylot 06:40–09:15 · powrót 18:20–20:55");
+  assert.equal(formatFlightTimes(log({ id: "plain", routeId: "r", amount: 10, checkedOn: "2026-10-27" })), null);
+
+  const raw = JSON.stringify({
+    routes: [],
+    logs: [
+      {
+        id: "old",
+        routeId: "r",
+        airline: "ryanair",
+        amount: 80,
+        currency: "PLN",
+        checkedOn: "2026-10-20",
+        createdAt: "2026-10-20T12:00:00.000Z",
+      },
+    ],
+  });
+  const stored = parseStore(raw);
+  assert.equal(stored.logs[0]?.outboundDepart, null);
+  assert.equal(stored.logs[0]?.returnArrive, null);
+
+  const withTimes = parseStore(
+    JSON.stringify({
+      routes: [],
+      logs: [{ ...stored.logs[0], outboundDepart: "07:05", returnArrive: "21:10" }],
+    }),
+  );
+  assert.equal(withTimes.logs[0]?.outboundDepart, "07:05");
+  assert.equal(withTimes.logs[0]?.returnArrive, "21:10");
+  assert.throws(() =>
+    parseStore(JSON.stringify({ routes: [], logs: [{ ...stored.logs[0], outboundDepart: "7:05" }] })),
+  );
 });
 
 test("corrupt storage is rejected", () => {

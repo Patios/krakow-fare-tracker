@@ -17,13 +17,23 @@ export type WatchedRoute = {
   createdAt: string;
 };
 
-export type PriceLog = {
-  id: string;
-  routeId: string;
+export type FlightTimes = {
+  outboundDepart: string | null;
+  outboundArrive: string | null;
+  returnDepart: string | null;
+  returnArrive: string | null;
+};
+
+export type PriceDraft = FlightTimes & {
   airline: Airline;
   amount: number;
-  currency: "PLN";
   checkedOn: string;
+};
+
+export type PriceLog = PriceDraft & {
+  id: string;
+  routeId: string;
+  currency: "PLN";
   createdAt: string;
 };
 

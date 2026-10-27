@@ -53,6 +53,36 @@ export function parseAmount(raw: string): number | null {
   return roundMoney(amount);
 }
 
+export function parseTimeInput(raw: string): string | null | "invalid" {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const match = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(trimmed);
+  if (!match) return "invalid";
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return "invalid";
+  return `${match[1]}:${match[2]}`;
+}
+
+export function formatFlightTimes(times: {
+  outboundDepart: string | null;
+  outboundArrive: string | null;
+  returnDepart: string | null;
+  returnArrive: string | null;
+}): string | null {
+  const outbound = legLabel("wylot", times.outboundDepart, times.outboundArrive);
+  const inbound = legLabel("powrót", times.returnDepart, times.returnArrive);
+  if (outbound && inbound) return `${outbound} · ${inbound}`;
+  return outbound ?? inbound;
+}
+
+function legLabel(kind: "wylot" | "powrót", depart: string | null, arrive: string | null): string | null {
+  if (depart && arrive) return `${kind} ${depart}–${arrive}`;
+  if (depart) return `${kind} ${depart}`;
+  if (!arrive) return null;
+  return kind === "wylot" ? `przylot ${arrive}` : `przylot powrotny ${arrive}`;
+}
+
 export function foldText(value: string): string {
   return value.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("pl");
 }
