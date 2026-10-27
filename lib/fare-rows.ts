@@ -8,6 +8,10 @@ export type FareRouteInsert = {
   outbound_to: string | null;
   return_date: string | null;
   created_at: string;
+  outbound_depart?: string | null;
+  outbound_arrive?: string | null;
+  return_depart?: string | null;
+  return_arrive?: string | null;
 };
 
 export type FarePriceInsert = {
@@ -24,8 +28,10 @@ export type FarePriceInsert = {
   created_at: string;
 };
 
+const TIME_FIELDS = ["outboundDepart", "outboundArrive", "returnDepart", "returnArrive"] as const;
+
 export function routeToRow(route: WatchedRoute): FareRouteInsert {
-  return {
+  const row: FareRouteInsert = {
     id: route.id,
     destination_iata: route.destinationIata,
     outbound_from: route.outboundFrom,
@@ -33,6 +39,13 @@ export function routeToRow(route: WatchedRoute): FareRouteInsert {
     return_date: route.returnDate,
     created_at: route.createdAt,
   };
+  if (TIME_FIELDS.some((key) => Object.prototype.hasOwnProperty.call(route, key))) {
+    row.outbound_depart = route.outboundDepart ?? null;
+    row.outbound_arrive = route.outboundArrive ?? null;
+    row.return_depart = route.returnDepart ?? null;
+    row.return_arrive = route.returnArrive ?? null;
+  }
+  return row;
 }
 
 export function priceToRow(log: PriceLog): FarePriceInsert {
@@ -63,7 +76,7 @@ export function routeFromRow(value: unknown): WatchedRoute | null {
     return null;
   }
   if (typeof row.created_at !== "string" || row.created_at.length === 0) return null;
-  return {
+  const route: WatchedRoute = {
     id: row.id,
     destinationIata: row.destination_iata,
     outboundFrom,
@@ -71,6 +84,21 @@ export function routeFromRow(value: unknown): WatchedRoute | null {
     returnDate,
     createdAt: row.created_at,
   };
+  const timeColumns = ["outbound_depart", "outbound_arrive", "return_depart", "return_arrive"] as const;
+  if (!timeColumns.some((key) => Object.prototype.hasOwnProperty.call(row, key))) return route;
+  const outboundDepart = readTime(row.outbound_depart);
+  const outboundArrive = readTime(row.outbound_arrive);
+  const returnDepart = readTime(row.return_depart);
+  const returnArrive = readTime(row.return_arrive);
+  if (
+    outboundDepart === "invalid" ||
+    outboundArrive === "invalid" ||
+    returnDepart === "invalid" ||
+    returnArrive === "invalid"
+  ) {
+    return null;
+  }
+  return { ...route, outboundDepart, outboundArrive, returnDepart, returnArrive };
 }
 
 export function priceFromRow(value: unknown): PriceLog | null {
@@ -143,23 +171,44 @@ export function mergeStores(remote: StoreData, local: StoreData): {
 export function cloudChanges(previous: StoreData, next: StoreData): {
   addedRoutes: WatchedRoute[];
   removedRouteIds: string[];
+  updatedRoutes: WatchedRoute[];
   addedLogs: PriceLog[];
   removedLogIds: string[];
 } {
   const nextRouteIds = new Set(next.routes.map((route) => route.id));
-  const previousRouteIds = new Set(previous.routes.map((route) => route.id));
+  const previousById = new Map(previous.routes.map((route) => [route.id, route]));
   const removedRouteIds = previous.routes.filter((route) => !nextRouteIds.has(route.id)).map((route) => route.id);
   const removedRouteIdSet = new Set(removedRouteIds);
   const nextLogIds = new Set(next.logs.map((log) => log.id));
   const previousLogIds = new Set(previous.logs.map((log) => log.id));
   return {
-    addedRoutes: next.routes.filter((route) => !previousRouteIds.has(route.id)),
+    addedRoutes: next.routes.filter((route) => !previousById.has(route.id)),
     removedRouteIds,
+    updatedRoutes: next.routes.filter((route) => {
+      const before = previousById.get(route.id);
+      return before != null && routeChanged(before, route);
+    }),
     addedLogs: next.logs.filter((log) => !previousLogIds.has(log.id)),
     removedLogIds: previous.logs
       .filter((log) => !nextLogIds.has(log.id) && !removedRouteIdSet.has(log.routeId))
       .map((log) => log.id),
   };
+}
+
+function routeChanged(previous: WatchedRoute, next: WatchedRoute) {
+  if (
+    previous.destinationIata !== next.destinationIata ||
+    previous.outboundFrom !== next.outboundFrom ||
+    (previous.outboundTo ?? null) !== (next.outboundTo ?? null) ||
+    (previous.returnDate ?? null) !== (next.returnDate ?? null)
+  ) {
+    return true;
+  }
+  return TIME_FIELDS.some((key) => {
+    if (!Object.prototype.hasOwnProperty.call(next, key)) return false;
+    const before = Object.prototype.hasOwnProperty.call(previous, key) ? previous[key] ?? null : null;
+    return before !== (next[key] ?? null);
+  });
 }
 
 function dateOnly(value: unknown): string | null {

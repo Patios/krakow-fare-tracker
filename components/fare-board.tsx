@@ -8,6 +8,7 @@ import { AccountDialog } from "@/components/account-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AirlineMark } from "@/components/airline-mark";
 import { AddRouteDialog } from "@/components/add-route-dialog";
+import { EditRouteDialog } from "@/components/edit-route-dialog";
 import { CheckFareDialog } from "@/components/check-fare-dialog";
 import { LogPriceDialog } from "@/components/log-price-dialog";
 import { RouteCard } from "@/components/route-card";
@@ -65,6 +66,8 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
     setAddOpen(true);
   }, [initialDestination]);
   const [logRouteId, setLogRouteId] = useState<string | null>(null);
+  const [editRouteId, setEditRouteId] = useState<string | null>(null);
+  const [editKey, setEditKey] = useState(0);
   const [logKey, setLogKey] = useState(0);
   const [check, setCheck] = useState<{
     routeId: string;
@@ -95,6 +98,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const checkRoute = ready?.routes.find((route) => route.id === check?.routeId) ?? null;
   const checkDestination = checkRoute ? destinationByIata.get(checkRoute.destinationIata) : undefined;
   const deleteRoute = ready?.routes.find((route) => route.id === deleteRouteId) ?? null;
+  const editRoute = ready?.routes.find((route) => route.id === editRouteId) ?? null;
 
   useEffect(() => startCloudSync(), []);
 
@@ -250,6 +254,10 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                     setLogKey((value) => value + 1);
                     setLogRouteId(route.id);
                   }}
+                  onEdit={() => {
+                    setEditKey((value) => value + 1);
+                    setEditRouteId(route.id);
+                  }}
                   onCheck={(session) => {
                     setCheckKey((value) => value + 1);
                     setCheck({ routeId: route.id, ...session });
@@ -306,6 +314,24 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
             if (saved) setFreshRouteId(id);
             return saved;
           }}
+        />
+      ) : null}
+
+      {ready && editRoute ? (
+        <EditRouteDialog
+          key={editKey}
+          route={editRoute}
+          routes={ready.routes}
+          logs={ready.logs}
+          onOpenChange={(open) => {
+            if (!open) setEditRouteId(null);
+          }}
+          onSave={(next) =>
+            commit({
+              routes: ready.routes.map((route) => (route.id === next.id ? next : route)),
+              logs: ready.logs,
+            })
+          }
         />
       ) : null}
 

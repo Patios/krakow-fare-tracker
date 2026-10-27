@@ -64,6 +64,11 @@ export function parseTimeInput(raw: string): string | null | "invalid" {
   return `${match[1]}:${match[2]}`;
 }
 
+export function flightClock(depart: string | null, arrive: string | null): string | null {
+  if (depart && arrive) return `${depart}–${arrive}`;
+  return depart ?? arrive;
+}
+
 export function formatFlightTimes(times: {
   outboundDepart: string | null;
   outboundArrive: string | null;

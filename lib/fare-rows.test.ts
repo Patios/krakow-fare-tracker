@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cloudChanges, mergeStores, priceFromRow, routeFromRow, storeFromRows } from "./fare-rows";
+import { cloudChanges, mergeStores, priceFromRow, routeFromRow, routeToRow, storeFromRows } from "./fare-rows";
 import type { PriceLog, WatchedRoute } from "./types";
 
 const route: WatchedRoute = {
@@ -76,4 +76,54 @@ test("a route deletion does not also delete its prices one by one", () => {
   assert.deepEqual(changes.removedRouteIds, [route.id]);
   assert.deepEqual(changes.removedLogIds, []);
   assert.deepEqual(changes.addedRoutes, []);
+  assert.deepEqual(changes.updatedRoutes, []);
+});
+
+test("an edited route is updated in place and an unchanged route is not", () => {
+  const edited = {
+    ...route,
+    outboundFrom: "2026-11-24",
+    outboundDepart: "08:00",
+    outboundArrive: "10:00",
+    returnDepart: null,
+    returnArrive: null,
+  };
+  const changed = cloudChanges({ routes: [route], logs: [log] }, { routes: [edited], logs: [log] });
+  assert.deepEqual(changed.addedRoutes, []);
+  assert.deepEqual(changed.removedRouteIds, []);
+  assert.deepEqual(changed.updatedRoutes, [edited]);
+
+  const sameTimes = { ...route, outboundDepart: null, outboundArrive: null, returnDepart: null, returnArrive: null };
+  const unchanged = cloudChanges({ routes: [route], logs: [] }, { routes: [sameTimes], logs: [] });
+  assert.deepEqual(unchanged.updatedRoutes, []);
+
+  const remoteWithHours = { ...sameTimes, outboundDepart: "08:00", outboundArrive: "10:00" };
+  const localWithoutHours = cloudChanges({ routes: [remoteWithHours], logs: [] }, { routes: [route], logs: [] });
+  assert.deepEqual(localWithoutHours.updatedRoutes, []);
+});
+
+test("route hours round-trip only when the columns are present", () => {
+  assert.equal("outbound_depart" in routeToRow(route), false);
+  const row = routeToRow({
+    ...route,
+    outboundDepart: "06:40",
+    outboundArrive: null,
+    returnDepart: null,
+    returnArrive: null,
+  });
+  assert.equal(row.outbound_depart, "06:40");
+  const stored = routeFromRow({
+    id: route.id,
+    destination_iata: "BGY",
+    outbound_from: "2026-11-23",
+    outbound_to: null,
+    return_date: null,
+    created_at: route.createdAt,
+    outbound_depart: "06:40:00",
+    outbound_arrive: null,
+    return_depart: null,
+    return_arrive: null,
+  });
+  assert.equal(stored?.outboundDepart, "06:40");
+  assert.equal(stored?.outboundArrive, null);
 });

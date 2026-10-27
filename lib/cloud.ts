@@ -107,6 +107,7 @@ export function queuePersist(previous: StoreData, next: StoreData) {
   if (
     changes.addedRoutes.length === 0 &&
     changes.removedRouteIds.length === 0 &&
+    changes.updatedRoutes.length === 0 &&
     changes.addedLogs.length === 0 &&
     changes.removedLogIds.length === 0
   ) {
@@ -193,8 +194,22 @@ async function syncAccount(replace: boolean) {
     if (!uploaded) return;
     base = merged;
   }
-  const withLocalEdits = applyChanges(base, during);
-  const savedEdits = await persistChanges(during);
+  const heldUpdates = cloudChanges(base, localBefore).updatedRoutes;
+  const removedDuring = new Set(during.removedRouteIds);
+  const updatedRoutes = new Map<string, ReturnType<typeof cloudChanges>["updatedRoutes"][number]>();
+  for (const route of [...heldUpdates, ...during.updatedRoutes]) {
+    if (!removedDuring.has(route.id)) updatedRoutes.set(route.id, route);
+  }
+  const pending = { ...during, updatedRoutes: [...updatedRoutes.values()] };
+  const withHeld = applyChanges(base, {
+    addedRoutes: [],
+    removedRouteIds: [],
+    addedLogs: [],
+    removedLogIds: [],
+    updatedRoutes: heldUpdates,
+  });
+  const withLocalEdits = applyChanges(withHeld, during);
+  const savedEdits = await persistChanges(pending);
   if (!savedEdits || !stillSignedIn(userId)) {
     patch({ syncing: false });
     return;
@@ -215,6 +230,10 @@ async function persistChanges(changes: ReturnType<typeof cloudChanges>): Promise
   if (changes.removedRouteIds.length > 0) {
     const { error } = await db.from("fare_routes").delete().in("id", changes.removedRouteIds);
     if (error) return failPersist(error.message);
+  }
+  for (const route of changes.updatedRoutes) {
+    const updated = await updateRoute(route);
+    if (!updated) return false;
   }
   const inserted = await insertRows(changes.addedRoutes.map(routeToRow), changes.addedLogs.map(priceToRow));
   if (!inserted) return false;
@@ -240,6 +259,35 @@ async function insertRows(
   return true;
 }
 
+async function updateRoute(route: Parameters<typeof routeToRow>[0]): Promise<boolean> {
+  const db = getSupabase();
+  if (!db) return failPersist("Brak konfiguracji Supabase.");
+  const { id, created_at: createdAt, ...fields } = routeToRow(route);
+  void createdAt;
+  const hadTimes = Boolean(fields.outbound_depart || fields.outbound_arrive || fields.return_depart || fields.return_arrive);
+  let { data, error } = await db.from("fare_routes").update(fields).eq("id", id).select("id");
+  if (error && missingTimeColumn(error.message)) {
+    const dates = { ...fields };
+    delete dates.outbound_depart;
+    delete dates.outbound_arrive;
+    delete dates.return_depart;
+    delete dates.return_arrive;
+    const retry = await db.from("fare_routes").update(dates).eq("id", id).select("id");
+    if (!retry.error && hadTimes) return failPersist(error.message);
+    data = retry.data;
+    error = retry.error;
+  }
+  if (error) return failPersist(error.message);
+  if (!data || data.length === 0) {
+    return failPersist("permission denied for table fare_routes");
+  }
+  return true;
+}
+
+function missingTimeColumn(message: string) {
+  return /outbound_depart|outbound_arrive|return_depart|return_arrive/i.test(message) && /schema cache|does not exist|column/i.test(message);
+}
+
 function failPersist(message: string): false {
   forgetAck();
   patch({ syncing: false, error: dbMessage(message) });
@@ -258,8 +306,11 @@ function readLocal(): StoreData {
 function applyChanges(data: StoreData, changes: ReturnType<typeof cloudChanges>): StoreData {
   const removedRoutes = new Set(changes.removedRouteIds);
   const removedLogs = new Set(changes.removedLogIds);
+  const updatedRoutes = new Map(changes.updatedRoutes.map((route) => [route.id, route]));
   const routes = [
-    ...data.routes.filter((route) => !removedRoutes.has(route.id)),
+    ...data.routes
+      .filter((route) => !removedRoutes.has(route.id))
+      .map((route) => updatedRoutes.get(route.id) ?? route),
     ...changes.addedRoutes.filter((route) => data.routes.every((existing) => existing.id !== route.id)),
   ];
   const routeIds = new Set(routes.map((route) => route.id));
@@ -273,8 +324,14 @@ function applyChanges(data: StoreData, changes: ReturnType<typeof cloudChanges>)
 async function pullStore(): Promise<{ ok: true; data: StoreData } | { ok: false; error: string }> {
   const db = getSupabase();
   if (!db) return { ok: false, error: "Brak konfiguracji Supabase." };
-  const [routes, prices] = await Promise.all([
-    db.from("fare_routes").select("id, destination_iata, outbound_from, outbound_to, return_date, created_at"),
+  const routeColumns = "id, destination_iata, outbound_from, outbound_to, return_date, created_at";
+  const routesWithTimes = await db
+    .from("fare_routes")
+    .select(`${routeColumns}, outbound_depart, outbound_arrive, return_depart, return_arrive`);
+  const routes = routesWithTimes.error && missingTimeColumn(routesWithTimes.error.message)
+    ? await db.from("fare_routes").select(routeColumns)
+    : routesWithTimes;
+  const [prices] = await Promise.all([
     db
       .from("fare_prices")
       .select(
@@ -311,6 +368,12 @@ function forgetAck() {
 }
 
 function dbMessage(message: string): string {
+  if (/permission denied|row-level security|42501/i.test(message)) {
+    return "Żeby zmienić zapisaną trasę na koncie, uruchom raz skrypt supabase/allow-edits.sql w SQL Editor. Zmiana zostaje w tej przeglądarce.";
+  }
+  if (missingTimeColumn(message)) {
+    return "Żeby zapisać godziny trasy na koncie, uruchom raz skrypt supabase/allow-edits.sql w SQL Editor. Zmiana zostaje w tej przeglądarce.";
+  }
   if (/fare_routes|fare_prices|schema cache|does not exist/i.test(message)) {
     return "W Supabase nie ma jeszcze tabel cen. Uruchom raz skrypt supabase/schema.sql w SQL Editor.";
   }

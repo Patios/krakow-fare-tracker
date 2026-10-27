@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AIRLINE_LABEL, RYANAIR_IATA, WIZZ_IATA, airlinesFor, destinationByIata, destinations } from "./airports";
-import { formatFlightTimes, parseAmount, parseTimeInput } from "./format";
+import { flightClock, formatFlightTimes, parseAmount, parseTimeInput } from "./format";
 import { lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "./routes";
 import { ryanairSearchUrl, wizzairSearchUrl } from "./search-urls";
 import { parseStore } from "./storage";
@@ -218,6 +218,9 @@ test("flight times are optional and stay with the logged price", () => {
     returnArrive: "20:55",
   });
   assert.equal(formatFlightTimes(timed), "wylot 06:40–09:15 · powrót 18:20–20:55");
+  assert.equal(flightClock("06:40", "09:15"), "06:40–09:15");
+  assert.equal(flightClock("06:40", null), "06:40");
+  assert.equal(flightClock(null, null), null);
   assert.equal(formatFlightTimes(log({ id: "plain", routeId: "r", amount: 10, checkedOn: "2026-10-27" })), null);
 
   const raw = JSON.stringify({

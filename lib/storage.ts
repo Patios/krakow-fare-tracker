@@ -70,7 +70,7 @@ function readRoute(value: unknown): WatchedRoute | null {
     return null;
   }
   if (typeof route.createdAt !== "string" || route.createdAt.length === 0) return null;
-  return {
+  const parsed: WatchedRoute = {
     id: route.id,
     destinationIata: route.destinationIata,
     outboundFrom: route.outboundFrom,
@@ -78,6 +78,21 @@ function readRoute(value: unknown): WatchedRoute | null {
     returnDate: route.returnDate ?? null,
     createdAt: route.createdAt,
   };
+  const timeFields = ["outboundDepart", "outboundArrive", "returnDepart", "returnArrive"] as const;
+  if (!timeFields.some((key) => Object.prototype.hasOwnProperty.call(route, key))) return parsed;
+  const outboundDepart = readOptionalTime(route.outboundDepart);
+  const outboundArrive = readOptionalTime(route.outboundArrive);
+  const returnDepart = readOptionalTime(route.returnDepart);
+  const returnArrive = readOptionalTime(route.returnArrive);
+  if (
+    outboundDepart === "invalid" ||
+    outboundArrive === "invalid" ||
+    returnDepart === "invalid" ||
+    returnArrive === "invalid"
+  ) {
+    return null;
+  }
+  return { ...parsed, outboundDepart, outboundArrive, returnDepart, returnArrive };
 }
 
 function readLog(value: unknown): PriceLog | null {

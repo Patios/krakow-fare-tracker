@@ -1,3 +1,4 @@
+-- Safe to run again. Existing tables, columns and policies are left in place.
 -- Run this once in the same Supabase project as Copy Paster:
 -- Dashboard > SQL Editor > New query.
 -- Then, in Authentication > URL configuration, allow:
@@ -11,6 +12,10 @@ create table if not exists public.fare_routes (
   outbound_from date not null,
   outbound_to date,
   return_date date,
+  outbound_depart time,
+  outbound_arrive time,
+  return_depart time,
+  return_arrive time,
   created_at timestamptz not null default now()
 );
 
@@ -29,6 +34,12 @@ create table if not exists public.fare_prices (
   created_at timestamptz not null default now()
 );
 
+alter table public.fare_routes
+  add column if not exists outbound_depart time,
+  add column if not exists outbound_arrive time,
+  add column if not exists return_depart time,
+  add column if not exists return_arrive time;
+
 create index if not exists fare_routes_user_id_idx on public.fare_routes (user_id);
 create index if not exists fare_prices_user_id_idx on public.fare_prices (user_id);
 create index if not exists fare_prices_route_id_idx on public.fare_prices (route_id);
@@ -36,31 +47,88 @@ create index if not exists fare_prices_route_id_idx on public.fare_prices (route
 alter table public.fare_routes enable row level security;
 alter table public.fare_prices enable row level security;
 
-grant select, insert, delete on public.fare_routes to authenticated;
-grant select, insert, delete on public.fare_prices to authenticated;
+grant select, insert, update, delete on public.fare_routes to authenticated;
+grant select, insert, update, delete on public.fare_prices to authenticated;
 
-create policy "Users can read their own fare routes"
-  on public.fare_routes for select to authenticated
-  using ((select auth.uid()) = user_id);
-create policy "Users can add their own fare routes"
-  on public.fare_routes for insert to authenticated
-  with check ((select auth.uid()) = user_id);
-create policy "Users can delete their own fare routes"
-  on public.fare_routes for delete to authenticated
-  using ((select auth.uid()) = user_id);
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'fare_routes' and policyname = 'Users can read their own fare routes'
+  ) then
+    create policy "Users can read their own fare routes"
+      on public.fare_routes for select to authenticated
+      using ((select auth.uid()) = user_id);
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'fare_routes' and policyname = 'Users can add their own fare routes'
+  ) then
+    create policy "Users can add their own fare routes"
+      on public.fare_routes for insert to authenticated
+      with check ((select auth.uid()) = user_id);
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'fare_routes' and policyname = 'Users can delete their own fare routes'
+  ) then
+    create policy "Users can delete their own fare routes"
+      on public.fare_routes for delete to authenticated
+      using ((select auth.uid()) = user_id);
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'fare_routes' and policyname = 'Users can update their own fare routes'
+  ) then
+    create policy "Users can update their own fare routes"
+      on public.fare_routes for update to authenticated
+      using ((select auth.uid()) = user_id)
+      with check ((select auth.uid()) = user_id);
+  end if;
 
-create policy "Users can read their own fare prices"
-  on public.fare_prices for select to authenticated
-  using ((select auth.uid()) = user_id);
-create policy "Users can add their own fare prices"
-  on public.fare_prices for insert to authenticated
-  with check (
-    (select auth.uid()) = user_id
-    and exists (
-      select 1 from public.fare_routes
-      where id = route_id and user_id = (select auth.uid())
-    )
-  );
-create policy "Users can delete their own fare prices"
-  on public.fare_prices for delete to authenticated
-  using ((select auth.uid()) = user_id);
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'fare_prices' and policyname = 'Users can read their own fare prices'
+  ) then
+    create policy "Users can read their own fare prices"
+      on public.fare_prices for select to authenticated
+      using ((select auth.uid()) = user_id);
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'fare_prices' and policyname = 'Users can add their own fare prices'
+  ) then
+    create policy "Users can add their own fare prices"
+      on public.fare_prices for insert to authenticated
+      with check (
+        (select auth.uid()) = user_id
+        and exists (
+          select 1 from public.fare_routes
+          where id = route_id and user_id = (select auth.uid())
+        )
+      );
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'fare_prices' and policyname = 'Users can delete their own fare prices'
+  ) then
+    create policy "Users can delete their own fare prices"
+      on public.fare_prices for delete to authenticated
+      using ((select auth.uid()) = user_id);
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'fare_prices' and policyname = 'Users can update their own fare prices'
+  ) then
+    create policy "Users can update their own fare prices"
+      on public.fare_prices for update to authenticated
+      using ((select auth.uid()) = user_id)
+      with check (
+        (select auth.uid()) = user_id
+        and exists (
+          select 1 from public.fare_routes
+          where id = route_id and user_id = (select auth.uid())
+        )
+      );
+  end if;
+end $$;

@@ -15,6 +15,10 @@ export type WatchedRoute = {
   outboundTo: string | null;
   returnDate: string | null;
   createdAt: string;
+  outboundDepart?: string | null;
+  outboundArrive?: string | null;
+  returnDepart?: string | null;
+  returnArrive?: string | null;
 };
 
 export type FlightTimes = {

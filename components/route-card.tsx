@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { FlightDayCheck } from "@/components/flight-day-check";
 import { AIRLINE_LABEL, destinationByIata } from "@/lib/airports";
-import { formatDate, formatFlightTimes, formatPln, formatTripDates, todayIso } from "@/lib/format";
+import { flightClock, formatDate, formatFlightTimes, formatPln, formatTripDates, todayIso } from "@/lib/format";
 import { lowestLoggedPrice, orderedLogs, priceDrop } from "@/lib/routes";
 import { openAirlineWindow } from "@/lib/airline-window";
 import { ryanairSearchUrl, wizzairSearchUrl, wizzRangeNote } from "@/lib/search-urls";
@@ -19,6 +19,7 @@ export function RouteCard({
   route,
   logs,
   onLogPrice,
+  onEdit,
   onCheck,
   onDeleteRoute,
   onDeleteLog,
@@ -27,6 +28,7 @@ export function RouteCard({
   route: WatchedRoute;
   logs: PriceLog[];
   onLogPrice: () => void;
+  onEdit: () => void;
   onCheck: (check: { airline: Airline; href: string; blocked: boolean }) => void;
   onDeleteRoute: () => void;
   onDeleteLog: (logId: string) => void;
@@ -38,6 +40,13 @@ export function RouteCard({
   const lowest = lowestLoggedPrice(routeLogs);
   const latest = routeLogs[0];
   const drop = priceDrop(routeLogs);
+  const outboundClock =
+    flightClock(route.outboundDepart ?? null, route.outboundArrive ?? null) ??
+    firstClock(routeLogs, "outboundDepart", "outboundArrive");
+  const returnClock = route.returnDate
+    ? flightClock(route.returnDepart ?? null, route.returnArrive ?? null) ??
+      firstClock(routeLogs, "returnDepart", "returnArrive")
+    : null;
   const past = route.outboundFrom < todayIso();
   const rangeNote = destination?.airlines.includes("wizzair") ? wizzRangeNote(route) : null;
   const trip = {
@@ -88,11 +97,17 @@ export function RouteCard({
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-muted-foreground">Wylot</dt>
-            <dd className="font-medium">{formatTripDates(route.outboundFrom, route.outboundTo)}</dd>
+            <dd className="font-medium">
+              {formatTripDates(route.outboundFrom, route.outboundTo)}
+              {outboundClock ? <span className="tabular-nums"> · {outboundClock}</span> : null}
+            </dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Powrót</dt>
-            <dd className="font-medium">{route.returnDate ? formatDate(route.returnDate) : "W jedną stronę"}</dd>
+            <dd className="font-medium">
+              {route.returnDate ? formatDate(route.returnDate) : "W jedną stronę"}
+              {returnClock ? <span className="tabular-nums"> · {returnClock}</span> : null}
+            </dd>
           </div>
         </dl>
 
@@ -159,6 +174,9 @@ export function RouteCard({
             Sprawdź dziś · {link.label}
           </Button>
         ))}
+        <Button type="button" variant="outline" className="h-10" onClick={onEdit}>
+          Edytuj
+        </Button>
         <Button type="button" variant="outline" className="h-10" onClick={onLogPrice} disabled={!destination}>
           Zapisz cenę
         </Button>
@@ -213,6 +231,18 @@ export function RouteCard({
       ) : null}
     </Card>
   );
+}
+
+function firstClock(
+  logs: PriceLog[],
+  depart: "outboundDepart" | "returnDepart",
+  arrive: "outboundArrive" | "returnArrive",
+): string | null {
+  for (const log of logs) {
+    const clock = flightClock(log[depart], log[arrive]);
+    if (clock) return clock;
+  }
+  return null;
 }
 
 function airlineStripe(airlines: Airline[] | undefined) {
