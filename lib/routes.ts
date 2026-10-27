@@ -12,6 +12,17 @@ export function orderedLogs(logs: PriceLog[], routeId: string): PriceLog[] {
     });
 }
 
+/** Newest saved price for each airline that flies the route. Missing airlines stay empty. */
+export function latestLogsByAirline(
+  logsNewestFirst: PriceLog[],
+  airlines: readonly Airline[],
+): { airline: Airline; log: PriceLog | null }[] {
+  return airlines.map((airline) => ({
+    airline,
+    log: logsNewestFirst.find((entry) => entry.airline === airline) ?? null,
+  }));
+}
+
 export function lowestLoggedPrice(logs: PriceLog[]): number | null {
   if (logs.length === 0) return null;
   return logs.reduce((lowest, log) => Math.min(lowest, log.amount), Number.POSITIVE_INFINITY);

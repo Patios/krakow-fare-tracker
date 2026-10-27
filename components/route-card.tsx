@@ -5,7 +5,7 @@ import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { FlightDayCheck } from "@/components/flight-day-check";
 import { AIRLINE_LABEL, destinationByIata } from "@/lib/airports";
 import { flightClock, formatDate, formatFlightTimes, formatPln, formatTripDates, todayIso } from "@/lib/format";
-import { lowestLoggedPrice, orderedLogs, priceDrop } from "@/lib/routes";
+import { latestLogsByAirline, lowestLoggedPrice, orderedLogs, priceDrop } from "@/lib/routes";
 import { openAirlineWindow } from "@/lib/airline-window";
 import { ryanairSearchUrl, wizzairSearchUrl, wizzRangeNote } from "@/lib/search-urls";
 import type { Airline, PriceLog, WatchedRoute } from "@/lib/types";
@@ -40,6 +40,8 @@ export function RouteCard({
   const lowest = lowestLoggedPrice(routeLogs);
   const latest = routeLogs[0];
   const drop = priceDrop(routeLogs);
+  const airlineOffers =
+    destination && destination.airlines.length > 1 ? latestLogsByAirline(routeLogs, destination.airlines) : null;
   const outboundClock =
     flightClock(route.outboundDepart ?? null, route.outboundArrive ?? null) ??
     firstClock(routeLogs, "outboundDepart", "outboundArrive");
@@ -47,6 +49,7 @@ export function RouteCard({
     ? flightClock(route.returnDepart ?? null, route.returnArrive ?? null) ??
       firstClock(routeLogs, "returnDepart", "returnArrive")
     : null;
+  const sharedClocks = !airlineOffers || !airlineOffers.some((offer) => offer.log && formatFlightTimes(offer.log));
   const past = route.outboundFrom < todayIso();
   const rangeNote = destination?.airlines.includes("wizzair") ? wizzRangeNote(route) : null;
   const trip = {
@@ -99,14 +102,14 @@ export function RouteCard({
             <dt className="text-muted-foreground">Wylot</dt>
             <dd className="font-medium">
               {formatTripDates(route.outboundFrom, route.outboundTo)}
-              {outboundClock ? <span className="tabular-nums"> · {outboundClock}</span> : null}
+              {sharedClocks && outboundClock ? <span className="tabular-nums"> · {outboundClock}</span> : null}
             </dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Powrót</dt>
             <dd className="font-medium">
               {route.returnDate ? formatDate(route.returnDate) : "W jedną stronę"}
-              {returnClock ? <span className="tabular-nums"> · {returnClock}</span> : null}
+              {sharedClocks && returnClock ? <span className="tabular-nums"> · {returnClock}</span> : null}
             </dd>
           </div>
         </dl>
@@ -123,7 +126,34 @@ export function RouteCard({
           />
         ) : null}
 
-        {lowest == null || !latest ? (
+        {airlineOffers ? (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {airlineOffers.map((offer) => {
+              const times = offer.log ? formatFlightTimes(offer.log) : null;
+              return (
+                <li key={offer.airline} className="grid gap-1">
+                  <p className="flex items-center gap-1.5 text-sm font-medium">
+                    <AirlineMark airline={offer.airline} className="size-5" />
+                    {AIRLINE_LABEL[offer.airline]}
+                  </p>
+                  {offer.log ? (
+                    <>
+                      <p className="font-heading text-3xl font-bold tracking-wide text-brand-ink tabular-nums dark:text-ryanair-yellow">
+                        {formatPln(offer.log.amount)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatDate(offer.log.checkedOn)}
+                        {times ? ` · ${times}` : ""}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Brak zapisanej ceny. Po sprawdzeniu u linii wpisz kwotę.</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : lowest == null || !latest ? (
           <p className="text-sm text-muted-foreground">Brak zapisanej ceny. Po sprawdzeniu u linii wpisz kwotę.</p>
         ) : (
           <div>
@@ -137,14 +167,14 @@ export function RouteCard({
                 {formatFlightTimes(latest) ? ` · ${formatFlightTimes(latest)}` : ""}
               </span>
             </p>
-            {drop ? (
-              <p className="mt-1 text-sm text-emerald-800">
-                Ostatni wpis jest niższy niż poprzedni ({formatPln(drop.previous.amount)},{" "}
-                {AIRLINE_LABEL[drop.previous.airline]}, {formatDate(drop.previous.checkedOn)}).
-              </p>
-            ) : null}
           </div>
         )}
+        {drop ? (
+          <p className="text-sm text-emerald-800">
+            Ostatni wpis jest niższy niż poprzedni ({formatPln(drop.previous.amount)},{" "}
+            {AIRLINE_LABEL[drop.previous.airline]}, {formatDate(drop.previous.checkedOn)}).
+          </p>
+        ) : null}
 
         {past ? (
           <p className="text-sm text-muted-foreground">

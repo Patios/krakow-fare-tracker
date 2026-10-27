@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AIRLINE_LABEL, RYANAIR_IATA, WIZZ_IATA, airlinesFor, destinationByIata, destinations } from "./airports";
 import { flightClock, formatFlightTimes, parseAmount, parseTimeInput } from "./format";
-import { lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "./routes";
+import { latestLogsByAirline, lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "./routes";
 import { ryanairSearchUrl, wizzairSearchUrl } from "./search-urls";
 import { parseStore } from "./storage";
 import type { Airline, PriceLog, WatchedRoute } from "./types";
@@ -182,6 +182,44 @@ test("routes sort by the lowest logged price and flag a drop against the previou
   assert.equal(drop?.previous.airline, "wizzair");
   assert.equal(priceDrop(orderedLogs(logs, "dear")), null);
   assert.equal(priceDrop(orderedLogs(logs, "empty")), null);
+});
+
+test("a route flown by two airlines keeps the newest price and times of each", () => {
+  const logs = [
+    log({
+      id: "wizz-old",
+      routeId: "mxp",
+      airline: "wizzair",
+      amount: 400,
+      checkedOn: "2026-10-20",
+      outboundDepart: "09:00",
+      outboundArrive: "11:00",
+    }),
+    log({
+      id: "ryan",
+      routeId: "mxp",
+      airline: "ryanair",
+      amount: 100,
+      checkedOn: "2026-10-27",
+      returnDepart: "19:00",
+      returnArrive: "21:00",
+    }),
+    log({
+      id: "wizz-new",
+      routeId: "mxp",
+      airline: "wizzair",
+      amount: 250,
+      checkedOn: "2026-10-27",
+      outboundDepart: "16:00",
+      outboundArrive: "18:20",
+    }),
+  ];
+  const offers = latestLogsByAirline(orderedLogs(logs, "mxp"), ["ryanair", "wizzair"]);
+  assert.equal(offers[0]?.log?.id, "ryan");
+  assert.equal(offers[0]?.log?.returnDepart, "19:00");
+  assert.equal(offers[1]?.log?.id, "wizz-new");
+  assert.equal(offers[1]?.log?.amount, 250);
+  assert.equal(offers[1]?.log?.outboundDepart, "16:00");
 });
 
 test("a higher latest price is not marked as a drop", () => {
