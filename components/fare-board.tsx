@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { MapPinned, RefreshCw } from "lucide-react";
+import { MapPinned, RefreshCw, Search } from "lucide-react";
 import { AccountDialog } from "@/components/account-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AirlineMark } from "@/components/airline-mark";
 import { AddRouteDialog } from "@/components/add-route-dialog";
 import { EditRouteDialog } from "@/components/edit-route-dialog";
 import { FareCalendarDialog } from "@/components/fare-calendar-dialog";
+import { RouteFinderDialog } from "@/components/route-finder-dialog";
 import { CheckFareDialog } from "@/components/check-fare-dialog";
 import { LogPriceDialog } from "@/components/log-price-dialog";
 import { RouteCard } from "@/components/route-card";
@@ -45,7 +46,8 @@ import {
   saveStore,
   subscribe,
 } from "@/lib/storage";
-import type { Airline, PriceDraft, StoreData } from "@/lib/types";
+import { foundRouteLog, type FoundRoute } from "@/lib/route-finder";
+import type { Airline, PriceDraft, SearchTrip, StoreData, WatchedRoute } from "@/lib/types";
 
 export function FareBoard({ initialDestinationIata }: { initialDestinationIata?: string }) {
   const router = useRouter();
@@ -73,6 +75,8 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const [editKey, setEditKey] = useState(0);
   const [calendarRouteId, setCalendarRouteId] = useState<string | null>(null);
   const [calendarKey, setCalendarKey] = useState(0);
+  const [finderOpen, setFinderOpen] = useState(false);
+  const [finderKey, setFinderKey] = useState(0);
   const [logKey, setLogKey] = useState(0);
   const [check, setCheck] = useState<{
     routeId: string;
@@ -130,6 +134,32 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
       return true;
     } catch {
       setSaveError("Nie udało się zapisać w tej przeglądarce.");
+      return false;
+    }
+  }
+
+  function addFoundRoute(trip: SearchTrip & { destinationIata: string }, found: FoundRoute | null) {
+    const current = interpretSnapshot(getSnapshot());
+    if (current.status !== "ready") return false;
+    const id = crypto.randomUUID();
+    const route: WatchedRoute = {
+      id,
+      destinationIata: trip.destinationIata,
+      outboundFrom: trip.outboundFrom,
+      outboundTo: trip.outboundTo,
+      returnDate: trip.returnDate,
+      createdAt: new Date().toISOString(),
+    };
+    const next = {
+      routes: [...current.data.routes, route],
+      logs: found ? [foundRouteLog(found, id, todayIso()), ...current.data.logs] : current.data.logs,
+    };
+    try {
+      saveStore(next);
+      queuePersist(current.data, next);
+      setSaveError(null);
+      return true;
+    } catch {
       return false;
     }
   }
@@ -266,6 +296,18 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
             </Button>
             <ThemeToggle />
             <AccountDialog />
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
+              onClick={() => {
+                setFinderKey((value) => value + 1);
+                setFinderOpen(true);
+              }}
+              disabled={!ready}
+            >
+              <Search /> Znajdź trasy
+            </Button>
             <Button type="button" className="h-10 font-semibold" onClick={() => openAdd()} disabled={!ready}>
               Dodaj trasę
             </Button>
@@ -453,6 +495,15 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
               logs: ready.logs,
             })
           }
+        />
+      ) : null}
+
+      {ready && finderOpen ? (
+        <RouteFinderDialog
+          key={finderKey}
+          routes={ready.routes}
+          onOpenChange={setFinderOpen}
+          onAdd={addFoundRoute}
         />
       ) : null}
 
