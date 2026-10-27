@@ -161,6 +161,17 @@ test("routes sort by the lowest logged price and flag a drop against the previou
     sortRoutes(routes, logs).map((item) => item.id),
     ["cheap", "dear", "empty"],
   );
+  assert.deepEqual(
+    sortRoutes(
+      [
+        route({ id: "empty", destinationIata: "VCE", createdAt: "2026-10-27T12:00:00.000Z" }),
+        route({ id: "dear", destinationIata: "STN" }),
+        route({ id: "cheap", destinationIata: "BGY" }),
+      ],
+      logs,
+    ).map((item) => item.id),
+    ["empty", "cheap", "dear"],
+  );
 
   const cheapLogs = orderedLogs(logs, "cheap");
   assert.equal(cheapLogs[0]?.id, "c");

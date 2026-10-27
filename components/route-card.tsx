@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
+import { FlightDayCheck } from "@/components/flight-day-check";
 import { AIRLINE_LABEL, destinationByIata } from "@/lib/airports";
 import { formatDate, formatFlightTimes, formatPln, formatTripDates, todayIso } from "@/lib/format";
 import { lowestLoggedPrice, orderedLogs, priceDrop } from "@/lib/routes";
@@ -14,6 +15,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { cn } from "@/lib/utils";
 
 export function RouteCard({
+  id,
   route,
   logs,
   onLogPrice,
@@ -21,6 +23,7 @@ export function RouteCard({
   onDeleteRoute,
   onDeleteLog,
 }: {
+  id?: string;
   route: WatchedRoute;
   logs: PriceLog[];
   onLogPrice: () => void;
@@ -51,7 +54,7 @@ export function RouteCard({
     : [];
 
   return (
-    <Card className={cn("pt-0", drop && "ring-emerald-700/30")}>
+    <Card id={id} className={cn("scroll-mt-4 pt-0", drop && "ring-emerald-700/30")}>
       <div aria-hidden className={cn("h-1.5 w-full", airlineStripe(destination?.airlines))} />
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
@@ -92,6 +95,8 @@ export function RouteCard({
             <dd className="font-medium">{route.returnDate ? formatDate(route.returnDate) : "W jedną stronę"}</dd>
           </div>
         </dl>
+
+        {destination ? <FlightDayCheck route={route} airlines={destination.airlines} /> : null}
 
         {lowest == null || !latest ? (
           <p className="text-sm text-muted-foreground">Brak zapisanej ceny. Po sprawdzeniu u linii wpisz kwotę.</p>

@@ -75,6 +75,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const [checkKey, setCheckKey] = useState(0);
   const [deleteRouteId, setDeleteRouteId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [freshRouteId, setFreshRouteId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [airlines, setAirlines] = useState<Airline[]>(["ryanair", "wizzair"]);
   const [dropsOnly, setDropsOnly] = useState(false);
@@ -96,6 +97,12 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const deleteRoute = ready?.routes.find((route) => route.id === deleteRouteId) ?? null;
 
   useEffect(() => startCloudSync(), []);
+
+  useEffect(() => {
+    if (!freshRouteId) return;
+    document.getElementById(`route-${freshRouteId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setFreshRouteId(null);
+  }, [freshRouteId, sorted]);
 
   function commit(next: StoreData) {
     if (!ready) return false;
@@ -228,13 +235,14 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                   ? `${filtered.length} z ${ready.routes.length} ${routeWord(ready.routes.length)}`
                   : `${ready.routes.length} ${routeWord(ready.routes.length)}`}
                 {priced.length > 0 ? ` · najtaniej ${formatPln(Math.min(...priced))}` : " · brak zapisanych cen"}
-                {drops > 0 ? ` · ${drops} ${drops === 1 ? "obniżka" : "obniżki"}` : ""}. Od najniższej zapisanej
-                ceny. Trasy bez wpisu są na końcu.
+                {drops > 0 ? ` · ${drops} ${drops === 1 ? "obniżka" : "obniżki"}` : ""}. Najnowsza trasa jest na
+                górze, dalej od najniższej ceny. Pozostałe bez wpisu są na końcu.
               </p>
             )}
             <div className="grid gap-4">
               {filtered.map((route) => (
                 <RouteCard
+                  id={`route-${route.id}`}
                   key={route.id}
                   route={route}
                   logs={ready.logs}
@@ -260,7 +268,8 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
         ) : null}
 
         <footer className="mt-auto border-t border-border pt-4 text-sm text-muted-foreground">
-          Ceny nie pochodzą od linii. Aplikacja nie pobiera taryf i nie loguje się do Ryanair ani Wizz Air.
+          Ceny wpisujesz sam. „Czy jest lot?” tylko sprawdza, czy linia sprzedaje połączenie w zapisanym dniu, i nie
+          zapisuje taryfy. Aplikacja nie loguje się do Ryanair ani Wizz Air.
           Kierunki: informator połączeń regularnych Kraków Airport, zima 2026/27, stan na{" "}
           <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>. Tylko Ryanair i Wizz Air.
         </footer>
@@ -278,12 +287,13 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
             setAddDestinationIata(undefined);
             if (initialDestinationIata) router.replace(pathname, { scroll: false });
           }}
-          onAdd={(trip) =>
-            commit({
+          onAdd={(trip) => {
+            const id = crypto.randomUUID();
+            const saved = commit({
               routes: [
                 ...ready.routes,
                 {
-                  id: crypto.randomUUID(),
+                  id,
                   destinationIata: trip.destinationIata,
                   outboundFrom: trip.outboundFrom,
                   outboundTo: trip.outboundTo,
@@ -292,8 +302,10 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                 },
               ],
               logs: ready.logs,
-            })
-          }
+            });
+            if (saved) setFreshRouteId(id);
+            return saved;
+          }}
         />
       ) : null}
 

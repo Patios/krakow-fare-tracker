@@ -39,7 +39,7 @@ export function sortRoutes(routes: WatchedRoute[], logs: PriceLog[]): WatchedRou
   const label = (route: WatchedRoute) =>
     destinationByIata.get(route.destinationIata)?.city ?? route.destinationIata;
 
-  return [...routes].sort((a, b) => {
+  const ranked = [...routes].sort((a, b) => {
     const aPrice = lowestLoggedPrice(orderedLogs(logs, a.id));
     const bPrice = lowestLoggedPrice(orderedLogs(logs, b.id));
     if (aPrice == null && bPrice == null) return label(a).localeCompare(label(b), "pl");
@@ -48,6 +48,25 @@ export function sortRoutes(routes: WatchedRoute[], logs: PriceLog[]): WatchedRou
     if (aPrice !== bPrice) return aPrice - bPrice;
     return label(a).localeCompare(label(b), "pl");
   });
+
+  const newest = newestRoute(routes);
+  if (!newest) return ranked;
+  return [newest, ...ranked.filter((route) => route.id !== newest.id)];
+}
+
+function newestRoute(routes: WatchedRoute[]): WatchedRoute | null {
+  if (routes.length < 2) return null;
+  let newest = routes[0];
+  let unique = true;
+  for (const route of routes.slice(1)) {
+    if (route.createdAt > newest.createdAt) {
+      newest = route;
+      unique = true;
+    } else if (route.createdAt === newest.createdAt) {
+      unique = false;
+    }
+  }
+  return unique ? newest : null;
 }
 
 export type RouteListFilter = {
