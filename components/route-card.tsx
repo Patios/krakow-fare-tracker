@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { CalendarDays, RefreshCw } from "lucide-react";
 import { formatAutoFlights } from "@/lib/fare-refresh";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { FlightDayCheck } from "@/components/flight-day-check";
@@ -28,6 +28,7 @@ export function RouteCard({
   refreshing,
   refreshNote,
   onRefresh,
+  onCalendar,
 }: {
   id?: string;
   route: WatchedRoute;
@@ -37,6 +38,7 @@ export function RouteCard({
   refreshing: boolean;
   refreshNote: string | null;
   onRefresh: () => void;
+  onCalendar: () => void;
   onCheck: (check: { airline: Airline; href: string; blocked: boolean }) => void;
   onDeleteRoute: () => void;
   onDeleteLog: (logId: string) => void;
@@ -232,6 +234,11 @@ export function RouteCard({
           <Button type="button" variant="outline" className="h-10" onClick={onRefresh} disabled={refreshing}>
             <RefreshCw className={refreshing ? "animate-spin" : undefined} />
             {refreshing ? "Pobieram…" : "Odśwież cenę"}
+          </Button>
+        ) : null}
+        {servedByRyanair ? (
+          <Button type="button" variant="outline" className="h-10" onClick={onCalendar}>
+            <CalendarDays /> Kalendarz cen
           </Button>
         ) : null}
         <Button type="button" variant="outline" className="h-10" onClick={onEdit}>

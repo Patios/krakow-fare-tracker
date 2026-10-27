@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { AirlineMark } from "@/components/airline-mark";
 import { AddRouteDialog } from "@/components/add-route-dialog";
 import { EditRouteDialog } from "@/components/edit-route-dialog";
+import { FareCalendarDialog } from "@/components/fare-calendar-dialog";
 import { CheckFareDialog } from "@/components/check-fare-dialog";
 import { LogPriceDialog } from "@/components/log-price-dialog";
 import { RouteCard } from "@/components/route-card";
@@ -31,6 +32,7 @@ import {
   startCloudSync,
   subscribeCloud,
 } from "@/lib/cloud";
+import { applyPickedFlights, type PickedLeg } from "@/lib/fare-calendar";
 import { refreshRyanairPrice, type RefreshOutcome } from "@/lib/fare-refresh";
 import { formatPln, todayIso } from "@/lib/format";
 import { lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "@/lib/routes";
@@ -69,6 +71,8 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const [logRouteId, setLogRouteId] = useState<string | null>(null);
   const [editRouteId, setEditRouteId] = useState<string | null>(null);
   const [editKey, setEditKey] = useState(0);
+  const [calendarRouteId, setCalendarRouteId] = useState<string | null>(null);
+  const [calendarKey, setCalendarKey] = useState(0);
   const [logKey, setLogKey] = useState(0);
   const [check, setCheck] = useState<{
     routeId: string;
@@ -103,6 +107,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const checkDestination = checkRoute ? destinationByIata.get(checkRoute.destinationIata) : undefined;
   const deleteRoute = ready?.routes.find((route) => route.id === deleteRouteId) ?? null;
   const editRoute = ready?.routes.find((route) => route.id === editRouteId) ?? null;
+  const calendarRoute = ready?.routes.find((route) => route.id === calendarRouteId) ?? null;
   const ryanairRouteIds = filtered
     .filter((route) => destinationByIata.get(route.destinationIata)?.airlines.includes("ryanair"))
     .map((route) => route.id);
@@ -125,6 +130,27 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
       return true;
     } catch {
       setSaveError("Nie udało się zapisać w tej przeglądarce.");
+      return false;
+    }
+  }
+
+  function pickFlights(routeId: string, outbound: PickedLeg, inbound: PickedLeg | null) {
+    const current = interpretSnapshot(getSnapshot());
+    if (current.status !== "ready") return false;
+    const route = current.data.routes.find((item) => item.id === routeId);
+    if (!route) return false;
+    const picked = applyPickedFlights(route, outbound, inbound, todayIso());
+    const next = {
+      routes: current.data.routes.map((item) => (item.id === routeId ? picked.route : item)),
+      logs: [picked.log, ...current.data.logs],
+    };
+    try {
+      saveStore(next);
+      queuePersist(current.data, next);
+      setSaveError(null);
+      setRefreshNotes((notes) => ({ ...notes, [routeId]: `Wybrano lot z kalendarza: ${formatPln(picked.log.amount)}.` }));
+      return true;
+    } catch {
       return false;
     }
   }
@@ -351,6 +377,10 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                   refreshing={refreshing.has(route.id)}
                   refreshNote={refreshNotes[route.id] ?? null}
                   onRefresh={() => void refreshPrices([route.id])}
+                  onCalendar={() => {
+                    setCalendarKey((value) => value + 1);
+                    setCalendarRouteId(route.id);
+                  }}
                   onDeleteRoute={() => setDeleteRouteId(route.id)}
                   onDeleteLog={(logId) =>
                     commit({
@@ -423,6 +453,18 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
               logs: ready.logs,
             })
           }
+        />
+      ) : null}
+
+      {ready && calendarRoute ? (
+        <FareCalendarDialog
+          key={calendarKey}
+          route={calendarRoute}
+          routes={ready.routes}
+          onOpenChange={(open) => {
+            if (!open) setCalendarRouteId(null);
+          }}
+          onPick={(outbound, inbound) => pickFlights(calendarRoute.id, outbound, inbound)}
         />
       ) : null}
 

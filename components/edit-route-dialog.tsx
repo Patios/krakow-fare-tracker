@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { DestinationPicker } from "@/components/destination-picker";
+import { DatePicker, tripPickerState, type TripDateField } from "@/components/date-picker";
 import { FlightDayCheck } from "@/components/flight-day-check";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +46,8 @@ export function EditRouteDialog({
   const [returnDepart, setReturnDepart] = useState(initialReturn.depart);
   const [returnArrive, setReturnArrive] = useState(initialReturn.arrive);
   const [error, setError] = useState("");
+  const [openPicker, setOpenPicker] = useState<TripDateField | null>(null);
+  const pickerState = tripPickerState(openPicker, setOpenPicker);
   const destination = destinationByIata.get(destinationIata);
   const specificDay = mode === "day" && isIsoDate(outboundFrom);
   const canCheckFlight = Boolean(destination) && specificDay;
@@ -162,26 +165,26 @@ export function EditRouteDialog({
             <div className={mode === "range" ? "grid gap-2 sm:grid-cols-2" : "grid gap-2"}>
               <div className="grid gap-1.5">
                 <Label htmlFor="edit-outbound-from">{mode === "range" ? "Od" : "Data wylotu"}</Label>
-                <Input
+                <DatePicker
                   id="edit-outbound-from"
-                  type="date"
                   value={outboundFrom}
-                  onChange={(event) => setOutboundFrom(event.target.value)}
-                  className="h-10"
-                  required
+                  onChange={(value) => {
+                    setOutboundFrom(value);
+                    if (outboundTo && outboundTo < value) setOutboundTo("");
+                    if (mode === "range") setOpenPicker("to");
+                  }}
+                  {...pickerState("from")}
                 />
               </div>
               {mode === "range" ? (
                 <div className="grid gap-1.5">
                   <Label htmlFor="edit-outbound-to">Do</Label>
-                  <Input
+                  <DatePicker
                     id="edit-outbound-to"
-                    type="date"
                     value={outboundTo}
-                    onChange={(event) => setOutboundTo(event.target.value)}
+                    onChange={setOutboundTo}
                     min={outboundFrom || undefined}
-                    className="h-10"
-                    required
+                    {...pickerState("to")}
                   />
                 </div>
               ) : null}
@@ -201,14 +204,12 @@ export function EditRouteDialog({
             {hasReturn ? (
               <div className="grid gap-1.5">
                 <Label htmlFor="edit-return-date">Data powrotu</Label>
-                <Input
+                <DatePicker
                   id="edit-return-date"
-                  type="date"
                   value={returnDate}
-                  onChange={(event) => setReturnDate(event.target.value)}
+                  onChange={setReturnDate}
                   min={outboundFrom || undefined}
-                  className="h-10"
-                  required
+                  {...pickerState("return")}
                 />
               </div>
             ) : (
