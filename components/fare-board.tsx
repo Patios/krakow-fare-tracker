@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { MapPinned } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
@@ -34,10 +34,9 @@ import type { Airline, PriceDraft, StoreData } from "@/lib/types";
 export function FareBoard() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const view = interpretSnapshot(snapshot);
-  const [addOpen, setAddOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(() => mapDestinationFromUrl() != null);
   const [addKey, setAddKey] = useState(0);
-  const [addDestinationIata, setAddDestinationIata] = useState<string | undefined>();
-  const handledMapDestination = useRef(false);
+  const [addDestinationIata, setAddDestinationIata] = useState<string | undefined>(mapDestinationFromUrl);
   const [logRouteId, setLogRouteId] = useState<string | null>(null);
   const [logKey, setLogKey] = useState(0);
   const [check, setCheck] = useState<{
@@ -80,15 +79,6 @@ export function FareBoard() {
     setAddKey((value) => value + 1);
     setAddOpen(true);
   }
-
-  useEffect(() => {
-    if (!ready || handledMapDestination.current) return;
-    handledMapDestination.current = true;
-    const destinationIata = new URLSearchParams(window.location.search).get("destination")?.toUpperCase();
-    if (!destinationIata || !destinationByIata.has(destinationIata)) return;
-    openAdd(destinationIata);
-    window.history.replaceState(null, "", window.location.pathname);
-  }, [ready]);
 
   return (
     <div className="relative flex flex-1 flex-col">
@@ -340,6 +330,12 @@ function routeWord(count: number) {
   const mod100 = count % 100;
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "trasy";
   return "tras";
+}
+
+function mapDestinationFromUrl() {
+  if (typeof window === "undefined") return undefined;
+  const destinationIata = new URLSearchParams(window.location.search).get("destination")?.toUpperCase();
+  return destinationIata && destinationByIata.has(destinationIata) ? destinationIata : undefined;
 }
 
 function LoadingState() {
