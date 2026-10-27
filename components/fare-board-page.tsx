@@ -7,5 +7,5 @@ export function FareBoardPage() {
   const searchParams = useSearchParams();
   const initialDestinationIata = searchParams.get("destination")?.toUpperCase();
 
-  return <FareBoard key={initialDestinationIata ?? "home"} initialDestinationIata={initialDestinationIata} />;
+  return <FareBoard initialDestinationIata={initialDestinationIata} />;
 }

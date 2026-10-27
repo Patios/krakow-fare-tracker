@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { MapPinned } from "lucide-react";
 import { AccountDialog } from "@/components/account-dialog";
 import { AirlineMark } from "@/components/airline-mark";
@@ -42,6 +43,8 @@ import {
 import type { Airline, PriceDraft, StoreData } from "@/lib/types";
 
 export function FareBoard({ initialDestinationIata }: { initialDestinationIata?: string }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const cloud = useSyncExternalStore(subscribeCloud, getCloudSnapshot, getCloudServerSnapshot);
   const view = interpretSnapshot(snapshot);
@@ -50,6 +53,16 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const [addOpen, setAddOpen] = useState(initialDestination != null);
   const [addKey, setAddKey] = useState(0);
   const [addDestinationIata, setAddDestinationIata] = useState<string | undefined>(initialDestination);
+  const seenDestination = useRef(initialDestination);
+
+  useEffect(() => {
+    if (initialDestination === seenDestination.current) return;
+    seenDestination.current = initialDestination;
+    if (!initialDestination) return;
+    setAddDestinationIata(initialDestination);
+    setAddKey((value) => value + 1);
+    setAddOpen(true);
+  }, [initialDestination]);
   const [logRouteId, setLogRouteId] = useState<string | null>(null);
   const [logKey, setLogKey] = useState(0);
   const [check, setCheck] = useState<{
@@ -259,7 +272,9 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
           initialDestinationIata={addDestinationIata}
           onOpenChange={(open) => {
             setAddOpen(open);
-            if (!open) setAddDestinationIata(undefined);
+            if (open) return;
+            setAddDestinationIata(undefined);
+            if (initialDestinationIata) router.replace(pathname, { scroll: false });
           }}
           onAdd={(trip) =>
             commit({
