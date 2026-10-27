@@ -31,12 +31,13 @@ import {
 } from "@/lib/storage";
 import type { Airline, PriceDraft, StoreData } from "@/lib/types";
 
-export function FareBoard() {
+export function FareBoard({ initialDestinationIata }: { initialDestinationIata?: string }) {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const view = interpretSnapshot(snapshot);
-  const [addOpen, setAddOpen] = useState(() => mapDestinationFromUrl() != null);
+  const initialDestination = destinationByIata.has(initialDestinationIata ?? "") ? initialDestinationIata : undefined;
+  const [addOpen, setAddOpen] = useState(initialDestination != null);
   const [addKey, setAddKey] = useState(0);
-  const [addDestinationIata, setAddDestinationIata] = useState<string | undefined>(mapDestinationFromUrl);
+  const [addDestinationIata, setAddDestinationIata] = useState<string | undefined>(initialDestination);
   const [logRouteId, setLogRouteId] = useState<string | null>(null);
   const [logKey, setLogKey] = useState(0);
   const [check, setCheck] = useState<{
@@ -112,7 +113,7 @@ export function FareBoard() {
             <Button nativeButton={false} render={<Link href="/mapa-polaczen" />} variant="outline" className="h-10 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white">
               <MapPinned /> Mapa połączeń
             </Button>
-            <Button type="button" className="h-10 font-semibold" onClick={openAdd} disabled={!ready}>
+            <Button type="button" className="h-10 font-semibold" onClick={() => openAdd()} disabled={!ready}>
               Dodaj trasę
             </Button>
           </div>
@@ -330,12 +331,6 @@ function routeWord(count: number) {
   const mod100 = count % 100;
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "trasy";
   return "tras";
-}
-
-function mapDestinationFromUrl() {
-  if (typeof window === "undefined") return undefined;
-  const destinationIata = new URLSearchParams(window.location.search).get("destination")?.toUpperCase();
-  return destinationIata && destinationByIata.has(destinationIata) ? destinationIata : undefined;
 }
 
 function LoadingState() {
