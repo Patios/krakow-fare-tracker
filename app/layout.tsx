@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, Outfit } from "next/font/google";
 import Script from "next/script";
+import { AddToHomeHint } from "@/components/add-to-home-hint";
 import { themeBootScript } from "@/lib/theme";
 import "./globals.css";
 
@@ -19,6 +20,17 @@ export const metadata: Metadata = {
   title: "Tanie loty z Krakowa",
   description:
     "Obserwuj trasy Ryanair i Wizz Air z lotniska KRK. Aplikacja otwiera gotowe wyszukiwanie, a wpisane ceny zostają na koncie albo w tej przeglądarce.",
+  appleWebApp: {
+    title: "Tanie loty",
+    statusBarStyle: "black-translucent",
+  },
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#073590",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -33,6 +45,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {themeBootScript}
         </Script>
         {children}
+        <AddToHomeHint />
       </body>
     </html>
   );
