@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CalendarDays, RefreshCw } from "lucide-react";
-import { formatAutoFlights, noFareText, type NoFareLeg } from "@/lib/fare-refresh";
+import { formatAutoFlights, noFareText, type DayFlights, type NoFare } from "@/lib/fare-refresh";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { FlightDayCheck } from "@/components/flight-day-check";
 import { AIRLINE_LABEL } from "@/lib/airports";
@@ -29,6 +29,7 @@ export function RouteCard({
   refreshing,
   refreshNote,
   noFare,
+  dayFlights,
   onRefresh,
   onCalendar,
   autoRefresh,
@@ -43,7 +44,8 @@ export function RouteCard({
   onEdit: () => void;
   refreshing: boolean;
   refreshNote: string | null;
-  noFare: NoFareLeg | null;
+  noFare: NoFare | null;
+  dayFlights: DayFlights[];
   onRefresh: () => void;
   onCalendar: () => void;
   autoRefresh: boolean;
@@ -218,6 +220,31 @@ export function RouteCard({
           <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
             {noFareText(route.destinationIata, noFare)} Cena Ryanair na karcie pochodzi z wcześniejszego wpisu.
           </p>
+        ) : null}
+        {dayFlights.some((leg) => leg.flights.length > 1) ? (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {dayFlights.map((leg) => (
+              <div key={leg.leg} className="rounded-lg bg-muted/60 px-3 py-2 text-sm">
+                <p className="font-medium">
+                  {leg.leg === "outbound" ? `Loty KRK → ${route.destinationIata}` : `Powroty ${route.destinationIata} → KRK`}
+                  {" · "}
+                  {formatDate(leg.date)}
+                </p>
+                <ul className="mt-1 grid gap-0.5">
+                  {[...leg.flights]
+                    .sort((a, b) => (a.departs ?? "").localeCompare(b.departs ?? ""))
+                    .map((flight) => (
+                      <li key={`${flight.number}-${flight.departs}`} className="flex justify-between gap-3 tabular-nums">
+                        <span className="text-muted-foreground">
+                          {flightClock(flight.departs, flight.arrives) ?? flight.departs} · {flight.number || "FR"}
+                        </span>
+                        <span className={cn(flight === leg.flights[0] && "font-semibold")}>{formatPln(flight.amount)}</span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         ) : null}
         {refreshNote ? (
           <p role="status" className="text-sm text-muted-foreground">

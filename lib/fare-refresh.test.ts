@@ -29,12 +29,29 @@ function route(overrides: Partial<WatchedRoute> = {}): WatchedRoute {
   };
 }
 
-function mockFetch(byOrigin: Record<string, unknown>) {
+type MockFare = ReturnType<typeof fare>;
+
+/** Answers like Ryanair: only the cheapest fare inside the asked dates and departure hours. */
+function mockFetch(byOrigin: Record<string, { fares: MockFare[] }>) {
   const urls: string[] = [];
   const fetchImpl = async (input: string) => {
     urls.push(input);
-    const origin = new URL(input).searchParams.get("departureAirportIataCode") ?? "";
-    return new Response(JSON.stringify(byOrigin[origin] ?? { fares: [] }), { status: 200 });
+    const params = new URL(input).searchParams;
+    const fromHour = params.get("outboundDepartureTimeFrom") ?? "00:00";
+    const toHour = params.get("outboundDepartureTimeTo") ?? "23:59";
+    const inside = (byOrigin[params.get("departureAirportIataCode") ?? ""]?.fares ?? [])
+      .filter((item) => {
+        const [day, time] = item.outbound.departureDate.split("T");
+        const hour = time.slice(0, 5);
+        return (
+          day >= (params.get("outboundDepartureDateFrom") ?? "") &&
+          day <= (params.get("outboundDepartureDateTo") ?? "") &&
+          hour >= fromHour &&
+          hour <= toHour
+        );
+      })
+      .sort((a, b) => a.outbound.price.value - b.outbound.price.value);
+    return new Response(JSON.stringify({ fares: inside.slice(0, 1) }), { status: 200 });
   };
   return { fetchImpl, urls };
 }
@@ -87,8 +104,45 @@ test("a return trip adds two one-way fares and asks for the return day only", as
   assert.equal(outcome.log.amount, 352.71);
   assert.equal(outcome.log.returnDepart, "14:30");
   assert.equal(outcome.log.returnArrive, "18:20");
-  assert.equal(outcome.log.autoFlights, "FR2589 2026-12-03; FR2590 2026-12-08");
-  assert.match(urls[1], /outboundDepartureDateFrom=2026-12-08&outboundDepartureDateTo=2026-12-08/);
+  assert.equal(outcome.log.autoFlights, "FR2589 2026-12-03 202.41; FR2590 2026-12-08 150.3");
+  assert.ok(urls.some((url) => /departureAirportIataCode=AGP.*outboundDepartureDateFrom=2026-12-08&outboundDepartureDateTo=2026-12-08/.test(url)));
+});
+
+test("a single day lists every flight that day and saves the cheapest", async () => {
+  const { fetchImpl, urls } = mockFetch({
+    KRK: {
+      fares: [
+        fare("2026-11-20", 162.71, "FR2435", "19:30", "20:55"),
+        fare("2026-11-20", 113.72, "FR2498", "11:35", "13:00"),
+        fare("2026-11-21", 50, "FR9"),
+      ],
+    },
+  });
+  const outcome = await refreshRyanairPrice(
+    route({ destinationIata: "STN", outboundFrom: "2026-11-20", outboundTo: null }),
+    [],
+    TODAY,
+    fetchImpl,
+    undefined,
+    NOW,
+  );
+  assert.equal(outcome.status, "saved");
+  if (outcome.status !== "saved") return;
+  assert.equal(outcome.log.amount, 113.72);
+  assert.equal(outcome.log.autoFlights, "FR2498 2026-11-20");
+  assert.deepEqual(
+    outcome.dayFlights.map((leg) => [leg.leg, leg.date, leg.flights.map((flight) => `${flight.number} ${flight.departs} ${flight.amount}`)]),
+    [["outbound", "2026-11-20", ["FR2498 11:35 113.72", "FR2435 19:30 162.71"]]],
+  );
+  assert.equal(urls.length, 5);
+  assert.match(urls[0], /outboundDepartureTimeFrom=00%3A00&outboundDepartureTimeTo=23%3A59/);
+});
+
+test("a date range checks only its cheapest fare", async () => {
+  const { fetchImpl } = mockFetch({ KRK: { fares: [fare("2026-12-03", 202.41, "FR2589")] } });
+  const outcome = await refreshRyanairPrice(route(), [], TODAY, fetchImpl, undefined, NOW);
+  assert.equal(outcome.status, "saved");
+  if (outcome.status === "saved") assert.deepEqual(outcome.dayFlights, []);
 });
 
 test("a range starting in the past is searched from today, a finished one is skipped", async () => {
@@ -104,16 +158,31 @@ test("no fare on sale, a Wizz-only route and a missing return fare save nothing"
   const empty = mockFetch({});
   assert.deepEqual(await refreshRyanairPrice(route(), [], TODAY, empty.fetchImpl), {
     status: "no-fare",
-    leg: "outbound",
-    from: "2026-12-01",
-    to: "2026-12-31",
+    dayFlights: [],
+    missing: [{ leg: "outbound", from: "2026-12-01", to: "2026-12-31" }],
+    available: null,
   });
 
-  const withoutReturn = mockFetch({ KRK: { fares: [fare("2026-12-03", 202.41)] } });
-  assert.deepEqual(
-    await refreshRyanairPrice(route({ outboundTo: null, outboundFrom: "2026-12-03", returnDate: "2027-01-05" }), [], TODAY, withoutReturn.fetchImpl),
-    { status: "no-fare", leg: "return", from: "2027-01-05", to: "2027-01-05" },
+  const withoutReturn = mockFetch({ KRK: { fares: [fare("2026-12-03", 202.41, "FR2589")] } });
+  const noReturn = await refreshRyanairPrice(
+    route({ outboundTo: null, outboundFrom: "2026-12-03", returnDate: "2027-01-05" }),
+    [],
+    TODAY,
+    withoutReturn.fetchImpl,
   );
+  assert.equal(noReturn.status, "no-fare");
+  if (noReturn.status === "no-fare") {
+    assert.deepEqual(noReturn.missing, [{ leg: "return", from: "2027-01-05", to: "2027-01-05" }]);
+    assert.deepEqual(noReturn.available, {
+      leg: "outbound",
+      from: "2026-12-03",
+      to: "2026-12-03",
+      amount: 202.41,
+      date: "2026-12-03",
+      number: "FR2589",
+      departs: "10:05",
+    });
+  }
 
   const wizzOnly = mockFetch({});
   assert.deepEqual(await refreshRyanairPrice(route({ destinationIata: "TLV" }), [], TODAY, wizzOnly.fetchImpl), {
@@ -141,6 +210,7 @@ test("the same price for the same flights on the same day is not saved twice", a
   assert.deepEqual(await refreshRyanairPrice(route(), [existing], TODAY, fetchImpl), {
     status: "unchanged",
     amount: 202.41,
+    dayFlights: [],
   });
 });
 
@@ -151,11 +221,22 @@ test("auto flights read as flight number and date per leg", () => {
 
 test("the missing leg names the day and the direction", () => {
   assert.equal(
-    noFareText("MXP", { leg: "outbound", from: "2026-11-05", to: "2026-11-05" }),
+    noFareText("MXP", { missing: [{ leg: "outbound", from: "2026-11-05", to: "2026-11-05" }], available: null }),
     "Ryanair nie sprzedaje lotu KRK → MXP 5 lis 2026.",
   );
   assert.equal(
-    noFareText("MXP", { leg: "return", from: "2026-11-06", to: "2026-11-06" }),
-    "Ryanair nie sprzedaje powrotu MXP → KRK 6 lis 2026.",
+    noFareText("MXP", {
+      missing: [{ leg: "outbound", from: "2026-11-05", to: "2026-11-05" }],
+      available: {
+        leg: "return",
+        from: "2026-11-06",
+        to: "2026-11-06",
+        amount: 194.76,
+        date: "2026-11-06",
+        number: "FR4463",
+        departs: "21:15",
+      },
+    }).replace(/\s/g, " "),
+    "Ryanair nie sprzedaje lotu KRK → MXP 5 lis 2026. Powrót MXP → KRK 6 lis 2026: 194,76 zł (FR4463, 21:15).",
   );
 });

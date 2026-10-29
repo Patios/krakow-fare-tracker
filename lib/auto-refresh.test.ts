@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { currentNoFare, DEFAULT_INTERVAL_HOURS, dueRouteIds, nextCheckAt, parseAutoRefresh, tripKey } from "./auto-refresh";
+import { currentDayFlights, currentNoFare, DEFAULT_INTERVAL_HOURS, dueRouteIds, nextCheckAt, parseAutoRefresh, tripKey } from "./auto-refresh";
 import { routeFromRow, routeToRow } from "./fare-rows";
 import type { WatchedRoute } from "./types";
 
@@ -28,6 +28,7 @@ test("only ticked Ryanair routes whose last check is older than the interval are
       stale: "2026-10-27T13:59:00.000Z",
     },
     noFare: {},
+    dayFlights: {},
   };
   const due = dueRouteIds(
     [
@@ -48,11 +49,17 @@ test("only ticked Ryanair routes whose last check is older than the interval are
 
 test("unknown intervals and broken storage fall back to the default", () => {
   assert.equal(parseAutoRefresh(JSON.stringify({ intervalHours: 5 })).intervalHours, DEFAULT_INTERVAL_HOURS);
-  assert.deepEqual(parseAutoRefresh("{broken"), { intervalHours: DEFAULT_INTERVAL_HOURS, lastChecked: {}, noFare: {} });
+  assert.deepEqual(parseAutoRefresh("{broken"), {
+    intervalHours: DEFAULT_INTERVAL_HOURS,
+    lastChecked: {},
+    noFare: {},
+    dayFlights: {},
+  });
   assert.deepEqual(parseAutoRefresh(JSON.stringify({ intervalHours: 8, lastChecked: { a: "nope", b: NOW.toISOString() } })), {
     intervalHours: 8,
     lastChecked: { b: NOW.toISOString() },
     noFare: {},
+    dayFlights: {},
   });
 });
 
@@ -65,8 +72,27 @@ test("a saved missing fare shows only while the route keeps the checked dates", 
       noFare: { mxp: { leg: "outbound", from: "2026-11-05", to: "2026-11-05", trip: tripKey(mxp) } },
     }),
   );
-  assert.deepEqual(currentNoFare(mxp, settings), { leg: "outbound", from: "2026-11-05", to: "2026-11-05", trip: tripKey(mxp) });
+  assert.deepEqual(currentNoFare(mxp, settings), {
+    missing: [{ leg: "outbound", from: "2026-11-05", to: "2026-11-05" }],
+    available: null,
+  });
   assert.equal(currentNoFare({ ...mxp, outboundFrom: "2026-11-03" }, settings), null);
+});
+
+test("the day's flights stay with the route only for the checked dates", () => {
+  const stn = route("stn", { destinationIata: "STN", outboundFrom: "2026-11-20" });
+  const legs = [
+    {
+      leg: "outbound",
+      date: "2026-11-20",
+      flights: [{ amount: 113.72, date: "2026-11-20", number: "FR2498", departs: "11:35", arrives: "13:00" }, { broken: true }],
+    },
+  ];
+  const settings = parseAutoRefresh(
+    JSON.stringify({ intervalHours: 4, lastChecked: {}, dayFlights: { stn: { trip: tripKey(stn), legs } } }),
+  );
+  assert.deepEqual(currentDayFlights(stn, settings), [{ ...legs[0], flights: [legs[0].flights[0]] }]);
+  assert.deepEqual(currentDayFlights({ ...stn, outboundFrom: "2026-11-21" }, settings), []);
 });
 
 test("the automatic flag round-trips through the account row", () => {

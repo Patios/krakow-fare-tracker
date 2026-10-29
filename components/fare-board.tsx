@@ -36,6 +36,7 @@ import {
 } from "@/lib/cloud";
 import {
   AUTO_INTERVAL_HOURS,
+  currentDayFlights,
   currentNoFare,
   dueRouteIds,
   getAutoRefreshServerSnapshot,
@@ -44,6 +45,7 @@ import {
   parseAutoRefresh,
   readAutoRefresh,
   recordChecks,
+  recordDayFlights,
   recordNoFare,
   setAutoInterval,
   subscribeAutoRefresh,
@@ -285,6 +287,9 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
           note = refreshNote(outcome, route.destinationIata);
           if (outcome.status === "no-fare") recordNoFare(route, outcome);
           else if (outcome.status === "saved" || outcome.status === "unchanged") recordNoFare(route, null);
+          if (outcome.status === "no-fare" || outcome.status === "saved" || outcome.status === "unchanged") {
+            recordDayFlights(route, outcome.dayFlights);
+          }
           if (outcome.status === "saved") {
             const current = interpretSnapshot(getSnapshot());
             if (current.status === "ready" && current.data.routes.some((item) => item.id === id)) {
@@ -519,6 +524,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                   refreshing={refreshing.has(route.id)}
                   refreshNote={refreshNotes[route.id] ?? null}
                   noFare={currentNoFare(route, autoSettings)}
+                  dayFlights={currentDayFlights(route, autoSettings)}
                   onRefresh={() => void refreshPrices([route.id])}
                   autoRefresh={route.autoRefresh === true}
                   autoIntervalHours={autoSettings.intervalHours}

@@ -81,7 +81,13 @@ export function ryanairDayUrl(origin: string, destination: string, date: string)
   return ryanairFaresUrl(origin, destination, date, date);
 }
 
-export function ryanairFaresUrl(origin: string, destination: string, fromDate: string, toDate: string): string | null {
+export function ryanairFaresUrl(
+  origin: string,
+  destination: string,
+  fromDate: string,
+  toDate: string,
+  hours?: { from: string; to: string },
+): string | null {
   const from = airportCode(origin);
   const to = airportCode(destination);
   if (!from || !to || !isIsoDate(fromDate) || !isIsoDate(toDate) || toDate < fromDate) return null;
@@ -90,8 +96,13 @@ export function ryanairFaresUrl(origin: string, destination: string, fromDate: s
     arrivalAirportIataCode: to,
     outboundDepartureDateFrom: fromDate,
     outboundDepartureDateTo: toDate,
-    currency: "PLN",
   });
+  if (hours) {
+    if (!/^\d{2}:\d{2}$/.test(hours.from) || !/^\d{2}:\d{2}$/.test(hours.to) || hours.to < hours.from) return null;
+    params.set("outboundDepartureTimeFrom", hours.from);
+    params.set("outboundDepartureTimeTo", hours.to);
+  }
+  params.set("currency", "PLN");
   return `https://www.ryanair.com/api/farfnd/v4/oneWayFares?${params.toString()}`;
 }
 
