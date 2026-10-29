@@ -454,47 +454,60 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                 Żadna zapisana trasa nie pasuje do filtra.
               </p>
             ) : (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <p className="text-sm text-muted-foreground">
-                {filterActive
-                  ? `${filtered.length} z ${ready.routes.length} ${routeWord(ready.routes.length)}`
-                  : `${ready.routes.length} ${routeWord(ready.routes.length)}`}
-                {priced.length > 0 ? ` · najtaniej ${formatPln(Math.min(...priced))}` : " · brak zapisanych cen"}
-                {drops > 0 ? ` · ${drops} ${drops === 1 ? "obniżka" : "obniżki"}` : ""}. Najnowsza trasa jest na
-                górze, dalej od najniższej ceny. Pozostałe bez wpisu są na końcu.
-              </p>
-              {ryanairRouteIds.length > 0 ? (
-                <div className="flex shrink-0 flex-col gap-2 sm:items-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={refreshingAll}
-                    onClick={() => void refreshPrices(ryanairRouteIds)}
-                  >
-                    <RefreshCw className={refreshingAll ? "animate-spin" : undefined} />
-                    {refreshingAll ? "Pobieram ceny…" : "Odśwież ceny Ryanair"}
-                  </Button>
-                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                    Zaznaczone trasy odświeżaj
-                    <select
-                      value={autoSettings.intervalHours}
-                      onChange={(event) => setAutoInterval(Number(event.target.value))}
-                      className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
-                    >
-                      {AUTO_INTERVAL_HOURS.map((hours) => (
-                        <option key={hours} value={hours}>
-                          co {hours} h
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {autoCount > 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      Automatycznie: {autoCount} {routeWord(autoCount)}, gdy ta strona jest otwarta.
-                    </p>
-                  ) : null}
+              <div className="flex flex-col gap-3 rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10 sm:flex-row sm:items-center sm:justify-between">
+                <div className="grid gap-0.5">
+                  <p className="font-medium">
+                    {filterActive
+                      ? `${filtered.length} z ${ready.routes.length} ${routeWord(ready.routes.length)}`
+                      : `${ready.routes.length} ${routeWord(ready.routes.length)}`}
+                    {priced.length > 0 ? (
+                      <>
+                        {" · najtaniej "}
+                        <span className="text-brand-ink tabular-nums dark:text-ryanair-yellow">
+                          {formatPln(Math.min(...priced))}
+                        </span>
+                      </>
+                    ) : (
+                      " · brak zapisanych cen"
+                    )}
+                    {drops > 0 ? ` · ${drops} ${drops === 1 ? "obniżka" : "obniżki"}` : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Na górze najnowsza trasa, dalej od najniższej ceny.
+                    {autoCount > 0
+                      ? ` Automatycznie odświeżane: ${autoCount} ${routeWord(autoCount)}, gdy strona jest otwarta.`
+                      : ""}
+                  </p>
                 </div>
-              ) : null}
+                {ryanairRouteIds.length > 0 ? (
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                      Automatycznie
+                      <select
+                        value={autoSettings.intervalHours}
+                        onChange={(event) => setAutoInterval(Number(event.target.value))}
+                        aria-label="Zaznaczone trasy odświeżaj"
+                        className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                      >
+                        {AUTO_INTERVAL_HOURS.map((hours) => (
+                          <option key={hours} value={hours}>
+                            co {hours} h
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9"
+                      disabled={refreshingAll}
+                      onClick={() => void refreshPrices(ryanairRouteIds)}
+                    >
+                      <RefreshCw className={refreshingAll ? "animate-spin" : undefined} />
+                      {refreshingAll ? "Pobieram ceny…" : "Odśwież ceny Ryanair"}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             )}
             {refreshSummary ? (

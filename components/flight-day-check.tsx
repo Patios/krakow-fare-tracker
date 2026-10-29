@@ -14,6 +14,7 @@ import {
   type FlightReadFailure,
 } from "@/lib/flight-day";
 import type { Airline } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type CheckState = {
   signature: string;
@@ -28,12 +29,14 @@ export function FlightDayCheck({
   enabled = true,
   disabledReason,
   searchHint = true,
+  buttonClassName,
 }: {
   trip: FlightDayTrip;
   airlines: Airline[];
   enabled?: boolean;
   disabledReason?: string;
   searchHint?: boolean;
+  buttonClassName?: string;
 }) {
   const [state, setState] = useState<CheckState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -75,7 +78,7 @@ export function FlightDayCheck({
       <Button
         type="button"
         variant="outline"
-        className="h-10 w-fit"
+        className={cn("h-10 w-fit", buttonClassName)}
         disabled={!enabled || pending}
         aria-label={ariaLabel}
         onClick={() => void run()}

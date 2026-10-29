@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { CalendarDays, RefreshCw } from "lucide-react";
-import { formatAutoFlights, noFareText, type DayFlights, type NoFare } from "@/lib/fare-refresh";
+import { useState, type ReactNode } from "react";
+import { CalendarDays, History, Pencil, PlaneLanding, PlaneTakeoff, RefreshCw, Trash2 } from "lucide-react";
+import { formatAutoFlights, noFareText, type DayFlights, type NoFare, type RyanairFare } from "@/lib/fare-refresh";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { FlightDayCheck } from "@/components/flight-day-check";
 import { AIRLINE_LABEL } from "@/lib/airports";
@@ -75,7 +75,11 @@ export function RouteCard({
   const sharedClocks = !airlineOffers || !airlineOffers.some((offer) => offer.log && formatFlightTimes(offer.log));
   const past = route.outboundFrom < todayIso();
   const servedByRyanair = destination?.airlines.includes("ryanair") ?? false;
+  const hasRyanairLog = routeLogs.some((log) => log.airline === "ryanair");
   const rangeNote = destination?.airlines.includes("wizzair") ? wizzRangeNote(route) : null;
+  const outboundFlights = dayFlights.find((leg) => leg.leg === "outbound") ?? null;
+  const returnFlights = dayFlights.find((leg) => leg.leg === "return") ?? null;
+  const listsFlights = dayFlights.length > 0;
   const trip = {
     outboundFrom: route.outboundFrom,
     outboundTo: route.outboundTo,
@@ -89,54 +93,122 @@ export function RouteCard({
       })
     : [];
 
+  const notices: { key: string; tone: "warn" | "info" | "good"; text: string }[] = [];
+  if (noFare && !refreshNote) {
+    notices.push({
+      key: "no-fare",
+      tone: "warn",
+      text: `${noFareText(route.destinationIata, noFare)}${hasRyanairLog ? " Cena Ryanair na karcie pochodzi z wcześniejszego wpisu." : ""}`,
+    });
+  }
+  if (refreshNote) notices.push({ key: "refresh", tone: "info", text: refreshNote });
+  if (drop) {
+    notices.push({
+      key: "drop",
+      tone: "good",
+      text: `Ostatni wpis jest niższy niż poprzedni (${formatPln(drop.previous.amount)}, ${AIRLINE_LABEL[drop.previous.airline]}, ${formatDate(drop.previous.checkedOn)}).`,
+    });
+  }
+  if (past) notices.push({ key: "past", tone: "info", text: "Data wylotu już minęła. Wyszukiwarka linii może jej nie pokazać." });
+  if (rangeNote) notices.push({ key: "range", tone: "info", text: rangeNote });
+
   return (
-    <Card id={id} className={cn("scroll-mt-4 pt-0", drop && "ring-emerald-700/30")}>
+    <Card id={id} className={cn("scroll-mt-4 gap-0 pt-0 pb-0", drop && "ring-emerald-700/30")}>
       <div aria-hidden className={cn("h-1.5 w-full", airlineStripe(destination?.airlines))} />
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div>
+      <CardHeader className="pt-4 pb-3">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
             <p className="font-heading text-xs font-semibold tracking-[0.16em] text-brand-ink uppercase">
               KRK → {route.destinationIata}
             </p>
             <h2 className="font-heading text-2xl leading-tight font-semibold tracking-wide">
               {destination?.city ?? route.destinationIata}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {destination
-                ? `${destination.airport} · ${destination.country}`
-                : "Tego lotniska nie ma w zimowym rozkładzie."}
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm text-muted-foreground">
+              <span>
+                {destination ? `${destination.airport} · ${destination.country}` : "Tego lotniska nie ma w zimowym rozkładzie."}
+              </span>
+              {destination?.airlines.map((airline) => <AirlineChip key={airline} airline={airline} />)}
+            </div>
           </div>
-          {drop ? (
-            <Badge className="bg-emerald-800 text-white">Taniej o {formatPln(drop.delta)}</Badge>
-          ) : null}
+          {!airlineOffers ? <PriceSummary lowest={lowest} latest={latest} drop={drop?.delta ?? null} /> : null}
         </div>
-        {destination ? (
-          <div className="flex flex-wrap gap-1.5">
-            {destination.airlines.map((airline) => (
-              <AirlineChip key={airline} airline={airline} />
+      </CardHeader>
+
+      <CardContent className="grid gap-4 pb-4">
+        {airlineOffers ? (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {airlineOffers.map((offer) => {
+              const times = offer.log ? formatFlightTimes(offer.log) : null;
+              return (
+                <li key={offer.airline} className="grid content-start gap-0.5 rounded-xl border px-3 py-2.5">
+                  <p className="flex items-center gap-1.5 text-sm font-medium">
+                    <AirlineMark airline={offer.airline} className="size-5" />
+                    {AIRLINE_LABEL[offer.airline]}
+                  </p>
+                  {offer.log ? (
+                    <>
+                      <p className="font-heading text-3xl font-bold tracking-wide text-brand-ink tabular-nums dark:text-ryanair-yellow">
+                        {formatPln(offer.log.amount)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(offer.log.checkedOn)}
+                        {times ? ` · ${times}` : ""}
+                      </p>
+                      {!(offer.airline === "ryanair" && listsFlights) ? <AutoSource log={offer.log} /> : null}
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {offer.airline === "ryanair"
+                        ? "Brak ceny. Pobierz ją przyciskiem „Odśwież cenę”."
+                        : "Brak ceny. Po sprawdzeniu u linii wpisz kwotę."}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+
+        <div className="grid overflow-hidden rounded-xl border sm:grid-cols-2">
+          <Leg
+            icon={<PlaneTakeoff />}
+            title={`Wylot · KRK → ${route.destinationIata}`}
+            date={formatTripDates(route.outboundFrom, route.outboundTo)}
+            clock={sharedClocks ? outboundClock : null}
+            flights={outboundFlights?.flights ?? null}
+            missing={noFare?.missing.some((leg) => leg.leg === "outbound") ?? false}
+          />
+          <Leg
+            icon={<PlaneLanding />}
+            title={route.returnDate ? `Powrót · ${route.destinationIata} → KRK` : "Powrót"}
+            date={route.returnDate ? formatDate(route.returnDate) : "W jedną stronę"}
+            clock={sharedClocks ? returnClock : null}
+            flights={returnFlights?.flights ?? null}
+            missing={noFare?.missing.some((leg) => leg.leg === "return") ?? false}
+            className="border-t sm:border-t-0 sm:border-l"
+          />
+        </div>
+
+        {!airlineOffers && latest && !(latest.airline === "ryanair" && listsFlights) ? <AutoSource log={latest} /> : null}
+
+        {notices.length > 0 ? (
+          <div className="grid gap-2" role="status">
+            {notices.map((notice) => (
+              <p
+                key={notice.key}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm",
+                  notice.tone === "warn" && "border border-amber-500/40 bg-amber-500/10",
+                  notice.tone === "good" && "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300",
+                  notice.tone === "info" && "bg-muted/60 text-muted-foreground",
+                )}
+              >
+                {notice.text}
+              </p>
             ))}
           </div>
         ) : null}
-      </CardHeader>
-
-      <CardContent className="grid gap-4">
-        <dl className="grid gap-2 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-muted-foreground">Wylot</dt>
-            <dd className="font-medium">
-              {formatTripDates(route.outboundFrom, route.outboundTo)}
-              {sharedClocks && outboundClock ? <span className="tabular-nums"> · {outboundClock}</span> : null}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Powrót</dt>
-            <dd className="font-medium">
-              {route.returnDate ? formatDate(route.returnDate) : "W jedną stronę"}
-              {sharedClocks && returnClock ? <span className="tabular-nums"> · {returnClock}</span> : null}
-            </dd>
-          </div>
-        </dl>
 
         {destination ? (
           <FlightDayCheck
@@ -147,173 +219,86 @@ export function RouteCard({
               returnDate: route.returnDate,
             }}
             airlines={destination.airlines}
+            buttonClassName="h-8"
           />
         ) : null}
+      </CardContent>
 
-        {airlineOffers ? (
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {airlineOffers.map((offer) => {
-              const times = offer.log ? formatFlightTimes(offer.log) : null;
-              return (
-                <li key={offer.airline} className="grid content-start gap-1">
-                  <p className="flex items-center gap-1.5 text-sm font-medium">
-                    <AirlineMark airline={offer.airline} className="size-5" />
-                    {AIRLINE_LABEL[offer.airline]}
-                  </p>
-                  {offer.log ? (
-                    <>
-                      <p className="font-heading text-3xl font-bold tracking-wide text-brand-ink tabular-nums dark:text-ryanair-yellow">
-                        {formatPln(offer.log.amount)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatDate(offer.log.checkedOn)}
-                        {times ? ` · ${times}` : ""}
-                      </p>
-                      <AutoSource log={offer.log} />
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      {offer.airline === "ryanair"
-                        ? "Brak zapisanej ceny. Pobierz ją przyciskiem „Odśwież cenę”."
-                        : "Brak zapisanej ceny. Po sprawdzeniu u linii wpisz kwotę."}
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        ) : lowest == null || !latest ? (
-          <p className="text-sm text-muted-foreground">
-            {servedByRyanair
-              ? "Brak zapisanej ceny. Pobierz ją przyciskiem „Odśwież cenę” albo wpisz kwotę."
-              : "Brak zapisanej ceny. Po sprawdzeniu u linii wpisz kwotę."}
-          </p>
-        ) : (
-          <div>
-            <p className="text-xs tracking-wide text-muted-foreground uppercase">Najniższa zapisana</p>
-            <p className="font-heading text-4xl font-bold tracking-wide text-brand-ink tabular-nums dark:text-ryanair-yellow">{formatPln(lowest)}</p>
-            <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-              <span>Ostatnio {formatPln(latest.amount)}</span>
-              <AirlineMark airline={latest.airline} className="size-5" />
-              <span>
-                {AIRLINE_LABEL[latest.airline]} · {formatDate(latest.checkedOn)}
-                {formatFlightTimes(latest) ? ` · ${formatFlightTimes(latest)}` : ""}
-              </span>
-            </p>
-            <AutoSource log={latest} />
-          </div>
-        )}
-        {drop ? (
-          <p className="text-sm text-emerald-800">
-            Ostatni wpis jest niższy niż poprzedni ({formatPln(drop.previous.amount)},{" "}
-            {AIRLINE_LABEL[drop.previous.airline]}, {formatDate(drop.previous.checkedOn)}).
-          </p>
-        ) : null}
-
-        {past ? (
-          <p className="text-sm text-muted-foreground">
-            Data wylotu już minęła. Wyszukiwarka linii może jej nie pokazać.
-          </p>
-        ) : null}
-        {rangeNote ? <p className="text-sm text-muted-foreground">{rangeNote}</p> : null}
-        {noFare && !refreshNote ? (
-          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
-            {noFareText(route.destinationIata, noFare)} Cena Ryanair na karcie pochodzi z wcześniejszego wpisu.
-          </p>
-        ) : null}
-        {dayFlights.some((leg) => leg.flights.length > 1) ? (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {dayFlights.map((leg) => (
-              <div key={leg.leg} className="rounded-lg bg-muted/60 px-3 py-2 text-sm">
-                <p className="font-medium">
-                  {leg.leg === "outbound" ? `Loty KRK → ${route.destinationIata}` : `Powroty ${route.destinationIata} → KRK`}
-                  {" · "}
-                  {formatDate(leg.date)}
-                </p>
-                <ul className="mt-1 grid gap-0.5">
-                  {[...leg.flights]
-                    .sort((a, b) => (a.departs ?? "").localeCompare(b.departs ?? ""))
-                    .map((flight) => (
-                      <li key={`${flight.number}-${flight.departs}`} className="flex justify-between gap-3 tabular-nums">
-                        <span className="text-muted-foreground">
-                          {flightClock(flight.departs, flight.arrives) ?? flight.departs} · {flight.number || "FR"}
-                        </span>
-                        <span className={cn(flight === leg.flights[0] && "font-semibold")}>{formatPln(flight.amount)}</span>
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {refreshNote ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            {refreshNote}
-          </p>
-        ) : null}
-        {servedByRyanair ? (
-          <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
-            <label className="flex items-center gap-2 font-medium">
+      <CardFooter className="flex-col items-stretch gap-3 border-t py-3">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          {links.map((link) => (
+            <Button
+              key={link.airline}
+              type="button"
+              className={cn(
+                "col-span-2 h-9 gap-2 px-3 font-semibold",
+                link.airline === "ryanair"
+                  ? "bg-ryanair-yellow text-ryanair hover:bg-ryanair-yellow/90"
+                  : "bg-wizz text-white hover:bg-wizz/90",
+              )}
+              onClick={() => {
+                const opened = openAirlineWindow(link.href, link.airline);
+                onCheck({ airline: link.airline, href: link.href, blocked: !opened });
+              }}
+            >
+              <AirlineMark airline={link.airline} variant="glyph" />
+              Sprawdź dziś · {link.label}
+            </Button>
+          ))}
+          {servedByRyanair ? (
+            <Button type="button" variant="outline" className="h-9" onClick={onRefresh} disabled={refreshing}>
+              <RefreshCw className={refreshing ? "animate-spin" : undefined} />
+              {refreshing ? "Pobieram…" : "Odśwież cenę"}
+            </Button>
+          ) : null}
+          {servedByRyanair ? (
+            <Button type="button" variant="outline" className="h-9" onClick={onCalendar}>
+              <CalendarDays /> Kalendarz cen
+            </Button>
+          ) : null}
+          <Button type="button" variant="outline" className="col-span-2 h-9" onClick={onLogPrice} disabled={!destination}>
+            Zapisz cenę
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm">
+          {servedByRyanair ? (
+            <label className="flex items-center gap-2 text-muted-foreground">
               <input
                 type="checkbox"
                 checked={autoRefresh}
                 onChange={(event) => onToggleAuto(event.target.checked)}
                 className="size-4 accent-primary"
               />
-              Odświeżaj cenę Ryanair automatycznie co {autoIntervalHours} h
+              <span className="grid">
+                Odświeżaj automatycznie co {autoIntervalHours} h
+                {checkedNote ? <span className="text-xs">{checkedNote}</span> : null}
+              </span>
             </label>
-            {checkedNote ? <span className="text-xs text-muted-foreground">{checkedNote}</span> : null}
+          ) : (
+            <span />
+          )}
+          <div className="flex flex-wrap gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-expanded={historyOpen}
+              onClick={() => setHistoryOpen((open) => !open)}
+            >
+              <History /> Historia ({routeLogs.length})
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={onEdit}>
+              <Pencil /> Edytuj
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={onDeleteRoute}>
+              <Trash2 /> Usuń
+            </Button>
           </div>
-        ) : null}
-      </CardContent>
-
-      <CardFooter className="flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap">
-        {links.map((link) => (
-          <Button
-            key={link.airline}
-            type="button"
-            className={cn(
-              "h-10 gap-2 px-3 font-semibold",
-              link.airline === "ryanair"
-                ? "bg-ryanair-yellow text-ryanair hover:bg-ryanair-yellow/90"
-                : "bg-wizz text-white hover:bg-wizz/90",
-            )}
-            onClick={() => {
-              const opened = openAirlineWindow(link.href, link.airline);
-              onCheck({ airline: link.airline, href: link.href, blocked: !opened });
-            }}
-          >
-            <AirlineMark airline={link.airline} variant="glyph" />
-            Sprawdź dziś · {link.label}
-          </Button>
-        ))}
-        {servedByRyanair ? (
-          <Button type="button" variant="outline" className="h-10" onClick={onRefresh} disabled={refreshing}>
-            <RefreshCw className={refreshing ? "animate-spin" : undefined} />
-            {refreshing ? "Pobieram…" : "Odśwież cenę"}
-          </Button>
-        ) : null}
-        {servedByRyanair ? (
-          <Button type="button" variant="outline" className="h-10" onClick={onCalendar}>
-            <CalendarDays /> Kalendarz cen
-          </Button>
-        ) : null}
-        <Button type="button" variant="outline" className="h-10" onClick={onEdit}>
-          Edytuj
-        </Button>
-        <Button type="button" variant="outline" className="h-10" onClick={onLogPrice} disabled={!destination}>
-          Zapisz cenę
-        </Button>
-        <Button type="button" variant="outline" className="h-10" onClick={() => setHistoryOpen((open) => !open)}>
-          Historia ({routeLogs.length})
-        </Button>
-        <Button type="button" variant="ghost" className="h-10 sm:ml-auto" onClick={onDeleteRoute}>
-          Usuń
-        </Button>
+        </div>
       </CardFooter>
 
       {historyOpen ? (
-        <div className="px-4 pb-4">
+        <div className="border-t px-4 py-4">
           {routeLogs.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nie ma jeszcze wpisów.</p>
           ) : (
@@ -355,6 +340,96 @@ export function RouteCard({
         </div>
       ) : null}
     </Card>
+  );
+}
+
+function PriceSummary({ lowest, latest, drop }: { lowest: number | null; latest: PriceLog | undefined; drop: number | null }) {
+  if (lowest == null || !latest) {
+    return (
+      <div className="text-left sm:text-right">
+        <p className="text-xs tracking-wide text-muted-foreground uppercase">Cena</p>
+        <p className="text-sm text-muted-foreground">Brak wpisu</p>
+      </div>
+    );
+  }
+  return (
+    <div className="grid justify-items-start gap-0.5 sm:justify-items-end sm:text-right">
+      <p className="text-xs tracking-wide text-muted-foreground uppercase">Najniższa zapisana</p>
+      <p className="font-heading text-4xl leading-none font-bold tracking-wide text-brand-ink tabular-nums dark:text-ryanair-yellow">
+        {formatPln(lowest)}
+      </p>
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <AirlineMark airline={latest.airline} className="size-4" />
+        <span>
+          Ostatnio <span className="font-medium text-foreground tabular-nums">{formatPln(latest.amount)}</span> ·{" "}
+          {formatDate(latest.checkedOn)}
+        </span>
+      </p>
+      {drop ? <Badge className="mt-1 bg-emerald-800 text-white">Taniej o {formatPln(drop)}</Badge> : null}
+    </div>
+  );
+}
+
+function Leg({
+  icon,
+  title,
+  date,
+  clock,
+  flights,
+  missing,
+  className,
+}: {
+  icon: ReactNode;
+  title: string;
+  date: string;
+  clock: string | null;
+  flights: RyanairFare[] | null;
+  missing: boolean;
+  className?: string;
+}) {
+  const byTime = flights ? [...flights].sort((a, b) => (a.departs ?? "").localeCompare(b.departs ?? "")) : [];
+  const cheapest = flights?.[0] ?? null;
+  return (
+    <div className={cn("grid content-start gap-1 px-3 py-2.5", className)}>
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
+        {icon}
+        {title}
+      </p>
+      <p className="font-medium">
+        {date}
+        {clock && byTime.length === 0 ? <span className="tabular-nums text-muted-foreground"> · {clock}</span> : null}
+      </p>
+      {missing ? (
+        <p className="mt-1 rounded-md bg-amber-500/10 px-2 py-1 text-sm text-amber-800 dark:text-amber-300">
+          Ryanair nie sprzedaje lotu w tym terminie
+        </p>
+      ) : null}
+      {byTime.length > 0 ? (
+        <ul className="mt-1 grid gap-1 text-sm">
+          {byTime.map((flight) => {
+            const best = flight === cheapest && byTime.length > 1;
+            return (
+              <li
+                key={`${flight.number}-${flight.departs}`}
+                className={cn(
+                  "flex items-center justify-between gap-3 rounded-md px-2 py-1 tabular-nums",
+                  best ? "bg-ryanair-yellow/15 ring-1 ring-ryanair-yellow/40" : "bg-muted/50",
+                )}
+              >
+                <span>
+                  <span className="font-medium">{flightClock(flight.departs, flight.arrives) ?? "—"}</span>
+                  <span className="text-muted-foreground"> · {flight.number || "FR"}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  {best ? <span className="text-[0.7rem] font-semibold tracking-wide uppercase">najtaniej</span> : null}
+                  <span className={cn(best && "font-semibold")}>{formatPln(flight.amount)}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
