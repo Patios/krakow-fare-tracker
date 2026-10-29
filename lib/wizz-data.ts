@@ -137,22 +137,9 @@ export function quoteWizz(
   today: string,
   now: () => Date = () => new Date(),
 ): WizzOutcome {
-  const fares = data?.fares[route.destinationIata];
-  if (!data || !fares) return { status: data ? "not-served" : "no-data" };
-
-  const windowEnd = route.returnDate
-    ? minDate(route.outboundTo ?? route.outboundFrom, route.returnDate)
-    : route.outboundTo ?? route.outboundFrom;
-  const windowStart = route.outboundFrom < today ? today : route.outboundFrom;
-  if (windowEnd < windowStart || (route.returnDate != null && route.returnDate < today)) return { status: "past" };
-  if (windowStart > data.through || (route.returnDate != null && route.returnDate > data.through)) {
-    return { status: "no-data" };
-  }
-
-  const outboundWindow: WizzLegWindow = { leg: "outbound", from: windowStart, to: windowEnd };
-  const returnWindow: WizzLegWindow | null = route.returnDate
-    ? { leg: "return", from: route.returnDate, to: route.returnDate }
-    : null;
+  const windows = legWindows(route, data, today);
+  if ("status" in windows) return windows;
+  const { fares, outboundWindow, returnWindow } = windows;
   const outbound = cheapestDay(fares.out, outboundWindow);
   const inbound = returnWindow ? cheapestDay(fares.back, returnWindow) : null;
 
@@ -190,6 +177,71 @@ export function quoteWizz(
       createdAt: now().toISOString(),
       autoFlights,
     },
+  };
+}
+
+export type WizzEstimateLeg = { leg: "outbound" | "return"; date: string; departs: string | null; amount: number; approximate: boolean };
+
+/**
+ * Wizz price for a route where some leg has only a "check price" day.
+ * Such a leg counts with its earlier fare, so the total is approximate and never goes to the history.
+ */
+export function estimateWizz(
+  route: WatchedRoute,
+  data: WizzData | null,
+  today: string,
+): { amount: number; legs: WizzEstimateLeg[] } | null {
+  const windows = legWindows(route, data, today);
+  if ("status" in windows) return null;
+  const { fares, outboundWindow, returnWindow } = windows;
+  const legs: WizzEstimateLeg[] = [];
+  for (const [days, window] of [
+    [fares.out, outboundWindow],
+    [fares.back, returnWindow],
+  ] as const) {
+    if (!window) continue;
+    const leg = estimateLeg(days, window);
+    if (!leg) return null;
+    legs.push(leg);
+  }
+  if (!legs.some((leg) => leg.approximate)) return null;
+  return { amount: roundMoney(legs.reduce((sum, leg) => sum + leg.amount, 0)), legs };
+}
+
+function estimateLeg(days: WizzDay[], window: WizzLegWindow): WizzEstimateLeg | null {
+  const best = cheapestDay(days, window);
+  if (best.day) {
+    return { leg: window.leg, date: best.day[0], departs: best.day[2][0] ?? null, amount: best.day[1] as number, approximate: false };
+  }
+  const hinted = days
+    .filter((day) => day[0] >= window.from && day[0] <= window.to && day[3] != null)
+    .reduce<WizzDay | null>((low, day) => (!low || (day[3] as number) < (low[3] as number) ? day : low), null);
+  if (!hinted) return null;
+  return { leg: window.leg, date: hinted[0], departs: hinted[2][0] ?? null, amount: hinted[3] as number, approximate: true };
+}
+
+function legWindows(
+  route: WatchedRoute,
+  data: WizzData | null,
+  today: string,
+):
+  | { status: "not-served" | "past" | "no-data" }
+  | { fares: { out: WizzDay[]; back: WizzDay[] }; outboundWindow: WizzLegWindow; returnWindow: WizzLegWindow | null } {
+  const fares = data?.fares[route.destinationIata];
+  if (!data || !fares) return { status: data ? "not-served" : "no-data" };
+
+  const windowEnd = route.returnDate
+    ? minDate(route.outboundTo ?? route.outboundFrom, route.returnDate)
+    : route.outboundTo ?? route.outboundFrom;
+  const windowStart = route.outboundFrom < today ? today : route.outboundFrom;
+  if (windowEnd < windowStart || (route.returnDate != null && route.returnDate < today)) return { status: "past" };
+  if (windowStart > data.through || (route.returnDate != null && route.returnDate > data.through)) {
+    return { status: "no-data" };
+  }
+  return {
+    fares,
+    outboundWindow: { leg: "outbound", from: windowStart, to: windowEnd },
+    returnWindow: route.returnDate ? { leg: "return", from: route.returnDate, to: route.returnDate } : null,
   };
 }
 

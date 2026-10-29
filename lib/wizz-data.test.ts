@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseWizzData, parseWizzTimetable, quoteWizz, type WizzData } from "./wizz-data";
+import { estimateWizz, parseWizzData, parseWizzTimetable, quoteWizz, type WizzData } from "./wizz-data";
 import type { PriceLog, WatchedRoute } from "./types";
 
 const TODAY = "2026-10-29";
@@ -116,4 +116,16 @@ test("routes outside the file, past dates and repeated prices save nothing", () 
     autoFlights: "W6 2026-11-06",
   };
   assert.deepEqual(quoteWizz(route(), [existing], data(), TODAY), { status: "unchanged", amount: 279 });
+});
+
+test("a check-price leg gives an approximate total, a fully priced trip gives none", () => {
+  assert.deepEqual(estimateWizz(route({ outboundFrom: "2026-11-05", returnDate: "2026-11-06" }), data(), TODAY), {
+    amount: 938,
+    legs: [
+      { leg: "outbound", date: "2026-11-05", departs: "19:00", amount: 679, approximate: true },
+      { leg: "return", date: "2026-11-06", departs: "21:30", amount: 259, approximate: false },
+    ],
+  });
+  assert.equal(estimateWizz(route({ outboundFrom: "2026-11-06" }), data(), TODAY), null);
+  assert.equal(estimateWizz(route({ outboundFrom: "2026-11-05", returnDate: "2026-11-08" }), data(), TODAY), null);
 });

@@ -66,6 +66,7 @@ import {
 import { foundRouteLog, type FoundRoute } from "@/lib/route-finder";
 import type { Airline, PriceDraft, PriceLog, SearchTrip, StoreData, WatchedRoute } from "@/lib/types";
 import {
+  estimateWizz,
   getWizzServerSnapshot,
   getWizzSnapshot,
   quoteWizz,
@@ -580,6 +581,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                   noFare={currentNoFare(route, autoSettings)}
                   dayFlights={currentDayFlights(route, autoSettings)}
                   wizzPriced={wizz?.fares[route.destinationIata] != null}
+                  wizzEstimate={estimateWizz(route, wizz, todayIso())}
                   onRefresh={() => void refreshPrices([route.id])}
                   autoRefresh={route.autoRefresh === true}
                   autoIntervalHours={autoSettings.intervalHours}

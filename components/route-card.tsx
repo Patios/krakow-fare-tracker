@@ -12,6 +12,7 @@ import { latestLogsByAirline, lowestLoggedPrice, orderedLogs, priceDrop } from "
 import { openAirlineWindow } from "@/lib/airline-window";
 import { ryanairSearchUrl, wizzairSearchUrl, wizzRangeNote } from "@/lib/search-urls";
 import type { Airline, PriceLog, WatchedRoute } from "@/lib/types";
+import type { WizzEstimateLeg } from "@/lib/wizz-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -31,6 +32,7 @@ export function RouteCard({
   noFare,
   dayFlights,
   wizzPriced,
+  wizzEstimate,
   onRefresh,
   onCalendar,
   autoRefresh,
@@ -48,6 +50,7 @@ export function RouteCard({
   noFare: NoFare | null;
   dayFlights: DayFlights[];
   wizzPriced: boolean;
+  wizzEstimate: { amount: number; legs: WizzEstimateLeg[] } | null;
   onRefresh: () => void;
   onCalendar: () => void;
   autoRefresh: boolean;
@@ -134,7 +137,13 @@ export function RouteCard({
               {destination?.airlines.map((airline) => <AirlineChip key={airline} airline={airline} />)}
             </div>
           </div>
-          {!airlineOffers ? <PriceSummary lowest={lowest} latest={latest} drop={drop?.delta ?? null} /> : null}
+          {airlineOffers ? null : !latest && wizzEstimate ? (
+            <div className="text-right">
+              <WizzEstimate estimate={wizzEstimate} named />
+            </div>
+          ) : (
+            <PriceSummary lowest={lowest} latest={latest} drop={drop?.delta ?? null} />
+          )}
         </div>
       </CardHeader>
 
@@ -160,6 +169,8 @@ export function RouteCard({
                       </p>
                       {!(offer.airline === "ryanair" && listsFlights) ? <AutoSource log={offer.log} /> : null}
                     </>
+                  ) : offer.airline === "wizzair" && wizzEstimate ? (
+                    <WizzEstimate estimate={wizzEstimate} />
                   ) : (
                     <p className="text-sm text-muted-foreground">
                       {offer.airline === "ryanair" || wizzPriced
@@ -181,6 +192,7 @@ export function RouteCard({
             clock={sharedClocks ? outboundClock : null}
             flights={outboundFlights?.flights ?? null}
             missing={noFare?.missing.some((leg) => leg.leg === "outbound") ?? false}
+            wizz={wizzEstimate?.legs.find((leg) => leg.leg === "outbound") ?? null}
           />
           <Leg
             icon={<PlaneLanding />}
@@ -189,6 +201,7 @@ export function RouteCard({
             clock={sharedClocks ? returnClock : null}
             flights={returnFlights?.flights ?? null}
             missing={noFare?.missing.some((leg) => leg.leg === "return") ?? false}
+            wizz={wizzEstimate?.legs.find((leg) => leg.leg === "return") ?? null}
             className="border-t sm:border-t-0 sm:border-l"
           />
         </div>
@@ -380,6 +393,7 @@ function Leg({
   clock,
   flights,
   missing,
+  wizz,
   className,
 }: {
   icon: ReactNode;
@@ -388,6 +402,7 @@ function Leg({
   clock: string | null;
   flights: RyanairFare[] | null;
   missing: boolean;
+  wizz: WizzEstimateLeg | null;
   className?: string;
 }) {
   const byTime = flights ? [...flights].sort((a, b) => (a.departs ?? "").localeCompare(b.departs ?? "")) : [];
@@ -432,7 +447,40 @@ function Leg({
           })}
         </ul>
       ) : null}
+      {wizz ? (
+        <p className="mt-1 flex items-center justify-between gap-3 rounded-md bg-wizz/10 px-2 py-1 text-sm tabular-nums">
+          <span>
+            <span className="font-medium">{wizz.departs ?? "—"}</span>
+            <span className="text-muted-foreground"> · Wizz Air · {formatDate(wizz.date)}</span>
+          </span>
+          <span className={cn(wizz.approximate && "italic")}>
+            {wizz.approximate ? "ok. " : ""}
+            {formatPln(wizz.amount)}
+          </span>
+        </p>
+      ) : null}
     </div>
+  );
+}
+
+function WizzEstimate({ estimate, named = false }: { estimate: { amount: number; legs: WizzEstimateLeg[] }; named?: boolean }) {
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">{named ? "Wizz Air · orientacyjnie" : "Orientacyjnie"}</p>
+      <p className="font-heading text-3xl font-bold tracking-wide text-wizz tabular-nums">
+        ok. {formatPln(estimate.amount)}
+      </p>
+      {estimate.legs.length > 1 ? (
+        <p className="text-xs tabular-nums">
+          {estimate.legs
+            .map((leg) => `${leg.leg === "outbound" ? "wylot" : "powrót"} ${leg.approximate ? "ok. " : ""}${formatPln(leg.amount)}`)
+            .join(" + ")}
+        </p>
+      ) : null}
+      <p className="text-xs text-muted-foreground">
+        Kalendarz Wizz nie podaje dokładnej ceny. Aktualną zobaczysz w „Sprawdź dziś · Wizz Air”.
+      </p>
+    </>
   );
 }
 
