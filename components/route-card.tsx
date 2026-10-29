@@ -30,6 +30,7 @@ export function RouteCard({
   refreshNote,
   noFare,
   dayFlights,
+  wizzPriced,
   onRefresh,
   onCalendar,
   autoRefresh,
@@ -46,6 +47,7 @@ export function RouteCard({
   refreshNote: string | null;
   noFare: NoFare | null;
   dayFlights: DayFlights[];
+  wizzPriced: boolean;
   onRefresh: () => void;
   onCalendar: () => void;
   autoRefresh: boolean;
@@ -75,6 +77,7 @@ export function RouteCard({
   const sharedClocks = !airlineOffers || !airlineOffers.some((offer) => offer.log && formatFlightTimes(offer.log));
   const past = route.outboundFrom < todayIso();
   const servedByRyanair = destination?.airlines.includes("ryanair") ?? false;
+  const refreshable = servedByRyanair || wizzPriced;
   const hasRyanairLog = routeLogs.some((log) => log.airline === "ryanair");
   const rangeNote = destination?.airlines.includes("wizzair") ? wizzRangeNote(route) : null;
   const outboundFlights = dayFlights.find((leg) => leg.leg === "outbound") ?? null;
@@ -159,7 +162,7 @@ export function RouteCard({
                     </>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      {offer.airline === "ryanair"
+                      {offer.airline === "ryanair" || wizzPriced
                         ? "Brak ceny. Pobierz ją przyciskiem „Odśwież cenę”."
                         : "Brak ceny. Po sprawdzeniu u linii wpisz kwotę."}
                     </p>
@@ -245,7 +248,7 @@ export function RouteCard({
               Sprawdź dziś · {link.label}
             </Button>
           ))}
-          {servedByRyanair ? (
+          {refreshable ? (
             <Button type="button" variant="outline" className="h-9" onClick={onRefresh} disabled={refreshing}>
               <RefreshCw className={refreshing ? "animate-spin" : undefined} />
               {refreshing ? "Pobieram…" : "Odśwież cenę"}
@@ -261,7 +264,7 @@ export function RouteCard({
           </Button>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm">
-          {servedByRyanair ? (
+          {refreshable ? (
             <label className="flex items-center gap-2 text-muted-foreground">
               <input
                 type="checkbox"
@@ -440,7 +443,8 @@ function AutoSource({ log }: { log: PriceLog }) {
   const flights = formatAutoFlights(log.autoFlights);
   return (
     <span className="mt-0.5 block text-xs text-muted-foreground">
-      Pobrane z Ryanair{flights ? ` · ${flights}` : ""}
+      {log.airline === "wizzair" ? "Z rozkładu Wizz Air" : "Pobrane z Ryanair"}
+      {flights ? ` · ${flights}` : ""}
     </span>
   );
 }

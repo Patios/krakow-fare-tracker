@@ -1,6 +1,7 @@
 import { lookupDestination } from "./network-refresh";
 import type { DayFlights, LegWindow, NoFare, RyanairFare } from "./fare-refresh";
 import type { WatchedRoute } from "./types";
+import { readWizz } from "./wizz-data";
 
 export const AUTO_INTERVAL_HOURS = [1, 2, 4, 8, 12, 24] as const;
 export const DEFAULT_INTERVAL_HOURS = 4;
@@ -196,7 +197,8 @@ export function recordNoFare(route: WatchedRoute, noFare: NoFare | null) {
 }
 
 export function canAutoRefresh(route: WatchedRoute, today: string): boolean {
-  if (!lookupDestination(route.destinationIata)?.airlines.includes("ryanair")) return false;
+  const ryanair = lookupDestination(route.destinationIata)?.airlines.includes("ryanair") ?? false;
+  if (!ryanair && !readWizz()?.fares[route.destinationIata]) return false;
   const lastOutbound = route.outboundTo ?? route.outboundFrom;
   if (lastOutbound < today) return false;
   return route.returnDate == null || route.returnDate >= today;

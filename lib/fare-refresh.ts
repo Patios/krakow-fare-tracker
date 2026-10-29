@@ -191,7 +191,7 @@ export function formatAutoFlights(autoFlights: string | null | undefined): strin
     .map(([number, date, amount]) => {
       if (!date || !isIsoDate(date)) return number;
       const price = amount && Number.isFinite(Number(amount)) ? `, ${formatPln(Number(amount))}` : "";
-      return `${number}, ${formatDate(date)}${price}`;
+      return number === "W6" ? `${formatDate(date)}${price}` : `${number}, ${formatDate(date)}${price}`;
     })
     .filter(Boolean);
   return legs.length > 0 ? legs.join(" + ") : null;

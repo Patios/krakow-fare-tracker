@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local research dumps, not part of the app
 /agent-tools/
+
+# Wizz Air timetable, written by npm run wizz and in the Pages workflow
+/public/wizz.json

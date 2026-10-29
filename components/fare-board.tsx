@@ -52,7 +52,7 @@ import {
 } from "@/lib/auto-refresh";
 import { applyPickedFlights, type PickedLeg } from "@/lib/fare-calendar";
 import { noFareText, refreshRyanairPrice, type RefreshOutcome } from "@/lib/fare-refresh";
-import { formatPln, todayIso } from "@/lib/format";
+import { formatDate, formatPln, todayIso } from "@/lib/format";
 import { lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "@/lib/routes";
 import {
   clearStore,
@@ -64,7 +64,15 @@ import {
   subscribe,
 } from "@/lib/storage";
 import { foundRouteLog, type FoundRoute } from "@/lib/route-finder";
-import type { Airline, PriceDraft, SearchTrip, StoreData, WatchedRoute } from "@/lib/types";
+import type { Airline, PriceDraft, PriceLog, SearchTrip, StoreData, WatchedRoute } from "@/lib/types";
+import {
+  getWizzServerSnapshot,
+  getWizzSnapshot,
+  quoteWizz,
+  readWizz,
+  subscribeWizz,
+  type WizzOutcome,
+} from "@/lib/wizz-data";
 
 export function FareBoard({ initialDestinationIata }: { initialDestinationIata?: string }) {
   const router = useRouter();
@@ -74,6 +82,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const autoSettings = parseAutoRefresh(
     useSyncExternalStore(subscribeAutoRefresh, getAutoRefreshSnapshot, getAutoRefreshServerSnapshot),
   );
+  const wizz = useSyncExternalStore(subscribeWizz, getWizzSnapshot, getWizzServerSnapshot);
   const inFlight = useRef(new Set<string>());
   const view = interpretSnapshot(snapshot);
   const signedIn = cloud.auth.status === "signed-in";
@@ -144,7 +153,10 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const editRoute = ready?.routes.find((route) => route.id === editRouteId) ?? null;
   const calendarRoute = ready?.routes.find((route) => route.id === calendarRouteId) ?? null;
   const ryanairRouteIds = filtered
-    .filter((route) => lookupDestination(route.destinationIata)?.airlines.includes("ryanair"))
+    .filter(
+      (route) =>
+        lookupDestination(route.destinationIata)?.airlines.includes("ryanair") || wizz?.fares[route.destinationIata],
+    )
     .map((route) => route.id);
   const autoCount = ready?.routes.filter((route) => route.autoRefresh === true).length ?? 0;
   const refreshingAll = ryanairRouteIds.length > 0 && ryanairRouteIds.every((id) => refreshing.has(id));
@@ -274,6 +286,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
 
     const today = todayIso();
     const tally = { saved: 0, unchanged: 0, noFare: 0, past: 0, failed: 0 };
+    const wizzTally = { saved: 0, unchanged: 0, noFare: 0 };
     const pending = [...queue];
 
     async function worker() {
@@ -281,35 +294,52 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
         const latest = interpretSnapshot(getSnapshot());
         const route = latest.status === "ready" ? latest.data.routes.find((item) => item.id === id) : undefined;
         if (!route || latest.status !== "ready") continue;
-        let note: string;
-        try {
-          const outcome = await refreshRyanairPrice(route, latest.data.logs, today);
-          note = refreshNote(outcome, route.destinationIata);
-          if (outcome.status === "no-fare") recordNoFare(route, outcome);
-          else if (outcome.status === "saved" || outcome.status === "unchanged") recordNoFare(route, null);
-          if (outcome.status === "no-fare" || outcome.status === "saved" || outcome.status === "unchanged") {
-            recordDayFlights(route, outcome.dayFlights);
-          }
-          if (outcome.status === "saved") {
-            const current = interpretSnapshot(getSnapshot());
-            if (current.status === "ready" && current.data.routes.some((item) => item.id === id)) {
-              const next = { routes: current.data.routes, logs: [outcome.log, ...current.data.logs] };
-              try {
-                saveStore(next);
-                queuePersist(current.data, next);
-                tally.saved += 1;
-              } catch {
-                note = "Nie udało się zapisać ceny w tej przeglądarce.";
-                tally.failed += 1;
-              }
+        const notes: string[] = [];
+        const newLogs: PriceLog[] = [];
+        const servedByRyanair = lookupDestination(route.destinationIata)?.airlines.includes("ryanair") ?? false;
+        if (servedByRyanair) {
+          try {
+            const outcome = await refreshRyanairPrice(route, latest.data.logs, today);
+            notes.push(refreshNote(outcome, route.destinationIata));
+            if (outcome.status === "no-fare") recordNoFare(route, outcome);
+            else if (outcome.status === "saved" || outcome.status === "unchanged") recordNoFare(route, null);
+            if (outcome.status === "no-fare" || outcome.status === "saved" || outcome.status === "unchanged") {
+              recordDayFlights(route, outcome.dayFlights);
             }
-          } else if (outcome.status === "unchanged") tally.unchanged += 1;
-          else if (outcome.status === "no-fare") tally.noFare += 1;
-          else if (outcome.status === "past") tally.past += 1;
-          else if (outcome.status === "failed") tally.failed += 1;
-        } catch {
-          note = "Nie udało się pobrać ceny z Ryanair.";
-          tally.failed += 1;
+            if (outcome.status === "saved") {
+              newLogs.push(outcome.log);
+              tally.saved += 1;
+            } else if (outcome.status === "unchanged") tally.unchanged += 1;
+            else if (outcome.status === "no-fare") tally.noFare += 1;
+            else if (outcome.status === "past") tally.past += 1;
+            else if (outcome.status === "failed") tally.failed += 1;
+          } catch {
+            notes.push("Nie udało się pobrać ceny z Ryanair.");
+            tally.failed += 1;
+          }
+        }
+        const wizzOutcome = quoteWizz(route, latest.data.logs, readWizz(), today);
+        const wizzText = wizzNote(wizzOutcome, route.destinationIata, servedByRyanair);
+        if (wizzText) notes.push(wizzText);
+        if (wizzOutcome.status === "saved") {
+          newLogs.push(wizzOutcome.log);
+          wizzTally.saved += 1;
+        } else if (wizzOutcome.status === "unchanged") wizzTally.unchanged += 1;
+        else if (wizzOutcome.status === "no-fare") wizzTally.noFare += 1;
+
+        let note = notes.join(" ");
+        if (newLogs.length > 0) {
+          const current = interpretSnapshot(getSnapshot());
+          if (current.status === "ready" && current.data.routes.some((item) => item.id === id)) {
+            const next = { routes: current.data.routes, logs: [...newLogs, ...current.data.logs] };
+            try {
+              saveStore(next);
+              queuePersist(current.data, next);
+            } catch {
+              note = "Nie udało się zapisać ceny w tej przeglądarce.";
+              tally.failed += 1;
+            }
+          }
         }
         inFlight.current.delete(id);
         setRefreshNotes((current) => ({ ...current, [id]: note }));
@@ -324,7 +354,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
     await Promise.all(Array.from({ length: Math.min(3, queue.length) }, worker));
     if (queue.length > 1 || auto) {
       const prefix = auto ? `Automatycznie o ${clockNow()}. ` : "";
-      setRefreshSummary(prefix + refreshSummaryText(tally));
+      setRefreshSummary(prefix + refreshSummaryText(tally, wizzTally));
     }
   }
 
@@ -381,7 +411,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
             Tanie loty z Krakowa
           </h1>
           <p className="mt-3 max-w-2xl text-base text-white/75">
-            Ryanair i Wizz Air. Start zawsze z KRK. Ceny Ryanair pobierasz przyciskiem, Wizz Air wpisujesz sam.{" "}
+            Ryanair i Wizz Air. Start zawsze z KRK. Ceny obu linii pobierasz przyciskiem „Odśwież cenę”.{" "}
             {signedIn
               ? "Historia jest na Twoim koncie Supabase."
               : "Bez logowania historia zostaje w tej przeglądarce."}
@@ -510,7 +540,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                       onClick={() => void refreshPrices(ryanairRouteIds)}
                     >
                       <RefreshCw className={refreshingAll ? "animate-spin" : undefined} />
-                      {refreshingAll ? "Pobieram ceny…" : "Odśwież ceny Ryanair"}
+                      {refreshingAll ? "Pobieram ceny…" : "Odśwież ceny"}
                     </Button>
                   </div>
                 ) : null}
@@ -544,6 +574,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                   refreshNote={refreshNotes[route.id] ?? null}
                   noFare={currentNoFare(route, autoSettings)}
                   dayFlights={currentDayFlights(route, autoSettings)}
+                  wizzPriced={wizz?.fares[route.destinationIata] != null}
                   onRefresh={() => void refreshPrices([route.id])}
                   autoRefresh={route.autoRefresh === true}
                   autoIntervalHours={autoSettings.intervalHours}
@@ -572,9 +603,11 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
         <footer className="mt-auto space-y-3 border-t border-border pt-4 text-sm text-muted-foreground">
           <p>
             „Odśwież ceny” pobiera z Ryanair najtańszy bilet w zapisanym dniu albo zakresie. Przy powrocie cena to suma
-            dwóch biletów w jedną stronę, bez bagażu i opłat dodatkowych. Ceny Wizz Air wpisujesz sam, bo Wizz Air
-            blokuje odczyt z przeglądarki. „Czy jest lot?” tylko sprawdza, czy linia sprzedaje połączenie w zapisanym
-            dniu. Aplikacja nie loguje się do Ryanair ani Wizz Air.
+            dwóch biletów w jedną stronę, bez bagażu i opłat dodatkowych. Ceny Wizz Air pochodzą z kalendarza cen Wizz
+            Air, który ta strona pobiera co kilka godzin
+            {wizz ? ` (ostatnio ${formatDateTime(wizz.checkedAt)})` : ""}, bo Wizz Air nie pozwala odczytać go
+            bezpośrednio z przeglądarki. To najniższa taryfa danego dnia, bez Wizz Discount Club. „Czy jest lot?” tylko
+            sprawdza, czy linia sprzedaje połączenie w zapisanym dniu. Aplikacja nie loguje się do Ryanair ani Wizz Air.
             Kierunki: informator połączeń regularnych Kraków Airport, zima 2026/27, stan na{" "}
             <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>. Tylko Ryanair i Wizz Air.
           </p>
@@ -846,6 +879,12 @@ function RouteFilters({
 
 const clockFormatter = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" });
 
+function formatDateTime(iso: string): string {
+  const value = new Date(iso);
+  if (Number.isNaN(value.getTime())) return iso;
+  return `${value.toLocaleDateString("pl-PL", { day: "numeric", month: "short" })} ${clockFormatter.format(value)}`;
+}
+
 function clockNow() {
   return clockFormatter.format(new Date());
 }
@@ -877,7 +916,10 @@ function refreshNote(outcome: RefreshOutcome, iata: string): string {
   }
 }
 
-function refreshSummaryText(tally: { saved: number; unchanged: number; noFare: number; past: number; failed: number }) {
+function refreshSummaryText(
+  tally: { saved: number; unchanged: number; noFare: number; past: number; failed: number },
+  wizzTally: { saved: number; unchanged: number; noFare: number },
+) {
   const parts = [
     tally.saved > 0 ? `nowe ceny: ${tally.saved}` : null,
     tally.unchanged > 0 ? `bez zmian: ${tally.unchanged}` : null,
@@ -885,7 +927,43 @@ function refreshSummaryText(tally: { saved: number; unchanged: number; noFare: n
     tally.past > 0 ? `minione terminy: ${tally.past}` : null,
     tally.failed > 0 ? `nie udało się pobrać: ${tally.failed}` : null,
   ].filter(Boolean);
-  return parts.length > 0 ? `Ryanair: ${parts.join(", ")}.` : "Ryanair: nic do odświeżenia.";
+  const wizzParts = [
+    wizzTally.saved > 0 ? `nowe ceny: ${wizzTally.saved}` : null,
+    wizzTally.unchanged > 0 ? `bez zmian: ${wizzTally.unchanged}` : null,
+    wizzTally.noFare > 0 ? `bez ceny w rozkładzie: ${wizzTally.noFare}` : null,
+  ].filter(Boolean);
+  const sentences = [
+    parts.length > 0 ? `Ryanair: ${parts.join(", ")}.` : null,
+    wizzParts.length > 0 ? `Wizz Air: ${wizzParts.join(", ")}.` : null,
+  ].filter(Boolean);
+  return sentences.length > 0 ? sentences.join(" ") : "Nic do odświeżenia.";
+}
+
+function wizzNote(outcome: WizzOutcome, iata: string, servedByRyanair: boolean): string | null {
+  switch (outcome.status) {
+    case "saved":
+      return `Zapisano ${formatPln(outcome.log.amount)} z Wizz Air.`;
+    case "unchanged":
+      return `Wizz Air bez zmian: ${formatPln(outcome.amount)}.`;
+    case "no-fare":
+      return outcome.missing
+        .map((leg) => {
+          const name = leg.leg === "outbound" ? `lotu KRK → ${iata}` : `powrotu ${iata} → KRK`;
+          const when = leg.from === leg.to ? formatDate(leg.from) : `${formatDate(leg.from)} – ${formatDate(leg.to)}`;
+          return leg.soldOut
+            ? `Wizz Air nie podaje ceny ${name} ${when}. Lot jest w rozkładzie, ale biletów może już nie być.`
+            : `Wizz Air nie ma ${name} ${when}.`;
+        })
+        .join(" ");
+    case "past":
+      return servedByRyanair ? null : "Ten termin już minął.";
+    case "no-data":
+      return lookupDestination(iata)?.airlines.includes("wizzair")
+        ? "Rozkład Wizz Air nie obejmuje jeszcze tego terminu."
+        : null;
+    case "not-served":
+      return null;
+  }
 }
 
 function routeWord(count: number) {

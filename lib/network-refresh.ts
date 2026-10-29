@@ -2,6 +2,7 @@ import { RYANAIR_IATA, destinationByIata } from "./airports";
 import { isIsoDate } from "./format";
 import { readJson, type FlightFetch, type FlightReadFailure } from "./flight-day";
 import type { Destination } from "./types";
+import { readWizz } from "./wizz-data";
 
 export const NETWORK_WINDOW_DAYS = 180;
 const STORAGE_KEY = "krk-fare-tracker.network.v1";
@@ -149,13 +150,17 @@ export function saveNetwork(snapshot: NetworkSnapshot) {
   for (const listener of listeners) listener();
 }
 
-/** Winter-guide airport, or one found by the last map refresh. */
+/** Winter-guide airport, one found by the last map refresh, or one in the published Wizz timetable. */
 export function lookupDestination(iata: string): Destination | undefined {
+  const wizz = readWizz()?.destinations.find((item) => item.iata === iata);
   const known = destinationByIata.get(iata);
-  if (known) return known;
+  if (known) {
+    return wizz && !known.airlines.includes("wizzair") ? { ...known, airlines: [...known.airlines, "wizzair"] } : known;
+  }
   const airport = readNetwork()?.airports.find((item) => item.iata === iata);
-  if (!airport) return undefined;
-  return { ...airport, airlines: ["ryanair"] };
+  if (airport) return { ...airport, airlines: wizz ? ["ryanair", "wizzair"] : ["ryanair"] };
+  if (wizz) return { iata, city: wizz.city, airport: wizz.city, country: wizz.country, airlines: ["wizzair"] };
+  return undefined;
 }
 
 export function networkExtras(): Destination[] {
