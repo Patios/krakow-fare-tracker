@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { MapPinned, RefreshCw, Search } from "lucide-react";
+import { MapPinned, Plus, RefreshCw, Search } from "lucide-react";
 import { AccountDialog } from "@/components/account-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AirlineMark } from "@/components/airline-mark";
@@ -345,8 +345,8 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
           <div className="flex-1 bg-ryanair-yellow" />
           <div className="flex-1 bg-wizz" />
         </div>
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-6 sm:flex-row sm:items-end sm:justify-between sm:px-6 sm:py-8">
-          <div className="max-w-2xl">
+        <div className="mx-auto w-full max-w-5xl px-4 py-5 sm:px-6 sm:py-7">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               {(["ryanair", "wizzair"] as const).map((airline) => (
                 <a
@@ -364,27 +364,36 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                 KRK · Balice
               </p>
             </div>
-            <h1 className="mt-3 font-heading text-4xl leading-none font-bold tracking-wide uppercase sm:text-5xl">
-              Tanie loty z Krakowa
-            </h1>
-            <p className="mt-3 max-w-xl text-base text-white/75">
-              Ryanair i Wizz Air. Start zawsze z KRK. Ceny Ryanair pobierasz przyciskiem, Wizz Air wpisujesz
-              sam.{" "}
-              {signedIn
-                ? "Historia jest na Twoim koncie Supabase."
-                : "Bez logowania historia zostaje w tej przeglądarce."}
-            </p>
+            <nav aria-label="Narzędzia" className="flex min-w-0 items-center gap-2 max-sm:[&_[data-label]]:hidden">
+              <Button
+                nativeButton={false}
+                render={<Link href="/mapa-polaczen" aria-label="Mapa połączeń" />}
+                variant="outline"
+                className="h-9 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
+              >
+                <MapPinned /> <span data-label>Mapa połączeń</span>
+              </Button>
+              <ThemeToggle className="h-9" />
+              <AccountDialog />
+            </nav>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button nativeButton={false} render={<Link href="/mapa-polaczen" />} variant="outline" className="h-10 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!">
-              <MapPinned /> Mapa połączeń
+          <h1 className="mt-5 font-heading text-4xl leading-none font-bold tracking-wide uppercase sm:text-5xl">
+            Tanie loty z Krakowa
+          </h1>
+          <p className="mt-3 max-w-2xl text-base text-white/75">
+            Ryanair i Wizz Air. Start zawsze z KRK. Ceny Ryanair pobierasz przyciskiem, Wizz Air wpisujesz sam.{" "}
+            {signedIn
+              ? "Historia jest na Twoim koncie Supabase."
+              : "Bez logowania historia zostaje w tej przeglądarce."}
+          </p>
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:flex">
+            <Button type="button" className="h-11 px-4 text-base font-semibold" onClick={() => openAdd()} disabled={!ready}>
+              <Plus /> Dodaj trasę
             </Button>
-            <ThemeToggle />
-            <AccountDialog />
             <Button
               type="button"
               variant="outline"
-              className="h-10 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
+              className="h-11 border-white/35 bg-white/10 px-4 text-base font-semibold text-white hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
               onClick={() => {
                 setFinderKey((value) => value + 1);
                 setFinderOpen(true);
@@ -392,9 +401,6 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
               disabled={!ready}
             >
               <Search /> Znajdź trasy
-            </Button>
-            <Button type="button" className="h-10 font-semibold" onClick={() => openAdd()} disabled={!ready}>
-              Dodaj trasę
             </Button>
           </div>
         </div>
@@ -499,7 +505,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-9"
+                      className="h-9 flex-1 sm:flex-none"
                       disabled={refreshingAll}
                       onClick={() => void refreshPrices(ryanairRouteIds)}
                     >

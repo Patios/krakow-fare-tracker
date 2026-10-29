@@ -49,11 +49,11 @@ export function ThemeToggle({ className }: { className?: string }) {
         className,
       )}
       onClick={() => applyTheme(document.documentElement.classList.contains("dark") ? "light" : "dark")}
+      title="Przełącz motyw"
     >
       <Moon className="dark:hidden" />
       <Sun className="hidden dark:inline" />
-      <span className="dark:hidden">Ciemny</span>
-      <span className="hidden dark:inline">Jasny</span>
-    </Button>
+      <span data-label className="dark:hidden">Ciemny</span>
+      <span data-label className="hidden dark:inline">Jasny</span>    </Button>
   );
 }

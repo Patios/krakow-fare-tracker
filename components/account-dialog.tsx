@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { LogIn, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -97,11 +98,15 @@ export function AccountDialog() {
       <Button
         type="button"
         variant="outline"
-        className="h-auto min-h-10 max-w-full border-white/35 bg-white/10 px-3 py-2 font-semibold whitespace-normal! text-white break-all hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
+        className="h-9 max-w-52 min-w-0 border-white/35 bg-white/10 px-3 font-semibold text-white hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
         title={signedIn ? accountEmail : undefined}
+        aria-label={signedIn ? `Konto ${accountEmail}` : "Zaloguj"}
         onClick={() => setOpen(true)}
       >
-        {signedIn ? accountEmail : "Zaloguj"}
+        {signedIn ? <UserRound /> : <LogIn />}
+        <span data-label className="truncate">
+          {signedIn ? accountEmail : "Zaloguj"}
+        </span>
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
