@@ -27,7 +27,7 @@ function data(): WizzData {
     fares: {
       MXP: {
         out: [
-          ["2026-11-05", null, ["19:00"]],
+          ["2026-11-05", null, ["19:00"], 679],
           ["2026-11-06", 279, ["19:00"]],
           ["2026-11-07", 169, ["19:00"]],
         ],
@@ -52,14 +52,14 @@ function route(overrides: Partial<WatchedRoute> = {}): WatchedRoute {
   };
 }
 
-test("the timetable keeps priced days and marks check-price days without an amount", () => {
+test("the timetable keeps priced days and gives check-price days only their earlier fare", () => {
   const parsed = parseWizzTimetable({
     outboundFlights: [flight("2026-11-06", 279), flight("2026-11-05", 0, "checkPrice"), flight("2026-11-07", 169, "price", ["21:00", "07:10"])],
     returnFlights: null,
   });
   assert.deepEqual(parsed, {
     out: [
-      ["2026-11-05", null, ["19:00"]],
+      ["2026-11-05", null, ["19:00"], 679],
       ["2026-11-06", 279, ["19:00"]],
       ["2026-11-07", 169, ["07:10", "21:00"]],
     ],
@@ -84,14 +84,14 @@ test("a return trip adds the cheapest outbound day and the return day", () => {
   assert.equal(outcome.log.autoFlights, "W6 2026-11-07 169; W6 2026-11-09 169");
 });
 
-test("a check-price day reads as possibly sold out, a day without flights as missing", () => {
+test("a check-price day keeps its earlier fare as a hint, a day without flights is missing", () => {
   assert.deepEqual(quoteWizz(route({ outboundFrom: "2026-11-05" }), [], data(), TODAY, NOW), {
     status: "no-fare",
-    missing: [{ leg: "outbound", from: "2026-11-05", to: "2026-11-05", soldOut: true }],
+    missing: [{ leg: "outbound", from: "2026-11-05", to: "2026-11-05", unpriced: true, earlier: 679 }],
   });
   assert.deepEqual(quoteWizz(route({ outboundFrom: "2026-11-06", returnDate: "2026-11-08" }), [], data(), TODAY, NOW), {
     status: "no-fare",
-    missing: [{ leg: "return", from: "2026-11-08", to: "2026-11-08", soldOut: false }],
+    missing: [{ leg: "return", from: "2026-11-08", to: "2026-11-08", unpriced: false, earlier: null }],
   });
 });
 

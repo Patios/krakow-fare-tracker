@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AIRLINE_HOME_URL, AIRLINE_LABEL, ROUTE_LIST_AS_OF, destinationByIata } from "@/lib/airports";
+import { AIRLINE_HOME_URL, AIRLINE_LABEL, destinationByIata } from "@/lib/airports";
 import { lookupDestination } from "@/lib/network-refresh";
 import {
   getCloudServerSnapshot,
@@ -159,6 +159,11 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
     )
     .map((route) => route.id);
   const autoCount = ready?.routes.filter((route) => route.autoRefresh === true).length ?? 0;
+  const ryanairUpdatedAt =
+    [
+      ...Object.values(autoSettings.lastChecked),
+      ...(ready?.logs ?? []).filter((log) => log.airline === "ryanair" && log.autoFlights).map((log) => log.createdAt),
+    ].sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null;
   const refreshingAll = ryanairRouteIds.length > 0 && ryanairRouteIds.every((id) => refreshing.has(id));
 
   useEffect(() => startCloudSync(), []);
@@ -601,16 +606,24 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
         ) : null}
 
         <footer className="mt-auto space-y-3 border-t border-border pt-4 text-sm text-muted-foreground">
-          <p>
-            „Odśwież ceny” pobiera z Ryanair najtańszy bilet w zapisanym dniu albo zakresie. Przy powrocie cena to suma
-            dwóch biletów w jedną stronę, bez bagażu i opłat dodatkowych. Ceny Wizz Air pochodzą z kalendarza cen Wizz
-            Air, który ta strona pobiera co kilka godzin
-            {wizz ? ` (ostatnio ${formatDateTime(wizz.checkedAt)})` : ""}, bo Wizz Air nie pozwala odczytać go
-            bezpośrednio z przeglądarki. To najniższa taryfa danego dnia, bez Wizz Discount Club. „Czy jest lot?” tylko
-            sprawdza, czy linia sprzedaje połączenie w zapisanym dniu. Aplikacja nie loguje się do Ryanair ani Wizz Air.
-            Kierunki: informator połączeń regularnych Kraków Airport, zima 2026/27, stan na{" "}
-            <time dateTime={ROUTE_LIST_AS_OF}>20 października 2026</time>. Tylko Ryanair i Wizz Air.
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            <span className="font-medium text-foreground">Ostatnia aktualizacja cen</span>
+            <span className="inline-flex items-center gap-1.5">
+              <AirlineMark airline="ryanair" className="size-4" />
+              Ryanair:{" "}
+              {ryanairUpdatedAt ? (
+                <time dateTime={ryanairUpdatedAt}>{formatDateTime(ryanairUpdatedAt)}</time>
+              ) : (
+                "jeszcze nie pobrano"
+              )}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <AirlineMark airline="wizzair" className="size-4" />
+              Wizz Air:{" "}
+              {wizz ? <time dateTime={wizz.checkedAt}>{formatDateTime(wizz.checkedAt)}</time> : "brak danych"}
+            </span>
           </p>
+          <p>Ceny to najtańsze bilety bez bagażu. Przy powrocie suma dwóch biletów w jedną stronę.</p>
           <p>
             Jeśli strona się przydaje, możesz{" "}
             <a
@@ -950,9 +963,11 @@ function wizzNote(outcome: WizzOutcome, iata: string, servedByRyanair: boolean):
         .map((leg) => {
           const name = leg.leg === "outbound" ? `lotu KRK → ${iata}` : `powrotu ${iata} → KRK`;
           const when = leg.from === leg.to ? formatDate(leg.from) : `${formatDate(leg.from)} – ${formatDate(leg.to)}`;
-          return leg.soldOut
-            ? `Wizz Air nie podaje ceny ${name} ${when}. Lot jest w rozkładzie, ale biletów może już nie być.`
-            : `Wizz Air nie ma ${name} ${when}.`;
+          if (!leg.unpriced) return `Wizz Air nie ma ${name} ${when}.`;
+          const earlier = leg.earlier
+            ? ` Wcześniej było ok. ${formatPln(leg.earlier)}, dziś może być drożej.`
+            : "";
+          return `Kalendarz Wizz Air nie podaje ceny ${name} ${when}, ale bilety mogą być w sprzedaży.${earlier} Aktualną cenę zobaczysz przyciskiem „Sprawdź dziś · Wizz Air”.`;
         })
         .join(" ");
     case "past":
