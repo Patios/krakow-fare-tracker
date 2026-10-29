@@ -1,4 +1,5 @@
 import { lookupDestination } from "./network-refresh";
+import type { NoFareLeg } from "./fare-refresh";
 import type { WatchedRoute } from "./types";
 
 export const AUTO_INTERVAL_HOURS = [1, 2, 4, 8, 12, 24] as const;
@@ -9,10 +10,22 @@ export type AutoRefreshSettings = {
   intervalHours: number;
   /** ISO timestamp of the last Ryanair check per route, from any button or the timer. */
   lastChecked: Record<string, string>;
+  /** Routes whose last Ryanair check found no fare, cleared when a fare comes back. */
+  noFare: Record<string, NoFareLeg & { trip: string }>;
 };
 
+export function tripKey(route: Pick<WatchedRoute, "outboundFrom" | "outboundTo" | "returnDate">): string {
+  return `${route.outboundFrom}|${route.outboundTo ?? ""}|${route.returnDate ?? ""}`;
+}
+
+/** The saved no-fare result, only while the route still has the dates it was checked for. */
+export function currentNoFare(route: WatchedRoute, settings: AutoRefreshSettings): NoFareLeg | null {
+  const entry = settings.noFare[route.id];
+  return entry && entry.trip === tripKey(route) ? entry : null;
+}
+
 const listeners = new Set<() => void>();
-const SERVER_SNAPSHOT = JSON.stringify({ intervalHours: DEFAULT_INTERVAL_HOURS, lastChecked: {} });
+const SERVER_SNAPSHOT = JSON.stringify({ intervalHours: DEFAULT_INTERVAL_HOURS, lastChecked: {}, noFare: {} });
 
 export function subscribeAutoRefresh(listener: () => void) {
   listeners.add(listener);
@@ -50,9 +63,23 @@ export function parseAutoRefresh(raw: string): AutoRefreshSettings {
         if (typeof at === "string" && !Number.isNaN(Date.parse(at))) lastChecked[id] = at;
       }
     }
-    return { intervalHours, lastChecked };
+    const noFare: AutoRefreshSettings["noFare"] = {};
+    if (value.noFare && typeof value.noFare === "object") {
+      for (const [id, entry] of Object.entries(value.noFare)) {
+        if (
+          entry &&
+          (entry.leg === "outbound" || entry.leg === "return") &&
+          typeof entry.from === "string" &&
+          typeof entry.to === "string" &&
+          typeof entry.trip === "string"
+        ) {
+          noFare[id] = { leg: entry.leg, from: entry.from, to: entry.to, trip: entry.trip };
+        }
+      }
+    }
+    return { intervalHours, lastChecked, noFare };
   } catch {
-    return { intervalHours: DEFAULT_INTERVAL_HOURS, lastChecked: {} };
+    return { intervalHours: DEFAULT_INTERVAL_HOURS, lastChecked: {}, noFare: {} };
   }
 }
 
@@ -80,6 +107,15 @@ export function recordChecks(routeIds: string[], now: Date = new Date()) {
     ...settings,
     lastChecked: { ...settings.lastChecked, ...Object.fromEntries(routeIds.map((id) => [id, at])) },
   });
+}
+
+export function recordNoFare(route: WatchedRoute, noFare: NoFareLeg | null) {
+  const settings = readAutoRefresh();
+  const next = { ...settings.noFare };
+  if (noFare) next[route.id] = { leg: noFare.leg, from: noFare.from, to: noFare.to, trip: tripKey(route) };
+  else if (route.id in next) delete next[route.id];
+  else return;
+  writeAutoRefresh({ ...settings, noFare: next });
 }
 
 export function canAutoRefresh(route: WatchedRoute, today: string): boolean {

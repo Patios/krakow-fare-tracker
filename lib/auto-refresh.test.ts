@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_INTERVAL_HOURS, dueRouteIds, nextCheckAt, parseAutoRefresh } from "./auto-refresh";
+import { currentNoFare, DEFAULT_INTERVAL_HOURS, dueRouteIds, nextCheckAt, parseAutoRefresh, tripKey } from "./auto-refresh";
 import { routeFromRow, routeToRow } from "./fare-rows";
 import type { WatchedRoute } from "./types";
 
@@ -27,6 +27,7 @@ test("only ticked Ryanair routes whose last check is older than the interval are
       fresh: "2026-10-27T15:00:00.000Z",
       stale: "2026-10-27T13:59:00.000Z",
     },
+    noFare: {},
   };
   const due = dueRouteIds(
     [
@@ -47,11 +48,25 @@ test("only ticked Ryanair routes whose last check is older than the interval are
 
 test("unknown intervals and broken storage fall back to the default", () => {
   assert.equal(parseAutoRefresh(JSON.stringify({ intervalHours: 5 })).intervalHours, DEFAULT_INTERVAL_HOURS);
-  assert.deepEqual(parseAutoRefresh("{broken"), { intervalHours: DEFAULT_INTERVAL_HOURS, lastChecked: {} });
+  assert.deepEqual(parseAutoRefresh("{broken"), { intervalHours: DEFAULT_INTERVAL_HOURS, lastChecked: {}, noFare: {} });
   assert.deepEqual(parseAutoRefresh(JSON.stringify({ intervalHours: 8, lastChecked: { a: "nope", b: NOW.toISOString() } })), {
     intervalHours: 8,
     lastChecked: { b: NOW.toISOString() },
+    noFare: {},
   });
+});
+
+test("a saved missing fare shows only while the route keeps the checked dates", () => {
+  const mxp = route("mxp", { destinationIata: "MXP", outboundFrom: "2026-11-05", returnDate: "2026-11-06" });
+  const settings = parseAutoRefresh(
+    JSON.stringify({
+      intervalHours: 4,
+      lastChecked: {},
+      noFare: { mxp: { leg: "outbound", from: "2026-11-05", to: "2026-11-05", trip: tripKey(mxp) } },
+    }),
+  );
+  assert.deepEqual(currentNoFare(mxp, settings), { leg: "outbound", from: "2026-11-05", to: "2026-11-05", trip: tripKey(mxp) });
+  assert.equal(currentNoFare({ ...mxp, outboundFrom: "2026-11-03" }, settings), null);
 });
 
 test("the automatic flag round-trips through the account row", () => {

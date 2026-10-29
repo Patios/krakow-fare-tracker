@@ -12,10 +12,13 @@ export type RyanairFare = {
   arrives: string | null;
 };
 
+export type NoFareLeg = { leg: "outbound" | "return"; from: string; to: string };
+
 export type RefreshOutcome =
   | { status: "saved"; log: PriceLog }
   | { status: "unchanged"; amount: number }
-  | { status: "not-served" | "past" | "no-fare" }
+  | { status: "not-served" | "past" }
+  | ({ status: "no-fare" } & NoFareLeg)
   | { status: "failed"; reason: FlightReadFailure };
 
 /** Cheapest Ryanair fare departing between from and to, or "none" when nothing is on sale. */
@@ -74,12 +77,20 @@ export async function refreshRyanairPrice(
   if (windowEnd < windowStart || (route.returnDate != null && route.returnDate < today)) return { status: "past" };
 
   const outbound = await cheapestLeg("KRK", route.destinationIata, windowStart, windowEnd, fetchImpl, signal);
-  if (outbound.status !== "ok") return outbound.status === "none" ? { status: "no-fare" } : { status: "failed", reason: outbound.reason };
+  if (outbound.status !== "ok") {
+    return outbound.status === "none"
+      ? { status: "no-fare", leg: "outbound", from: windowStart, to: windowEnd }
+      : { status: "failed", reason: outbound.reason };
+  }
 
   let inbound: RyanairFare | null = null;
   if (route.returnDate) {
     const leg = await cheapestLeg(route.destinationIata, "KRK", route.returnDate, route.returnDate, fetchImpl, signal);
-    if (leg.status !== "ok") return leg.status === "none" ? { status: "no-fare" } : { status: "failed", reason: leg.reason };
+    if (leg.status !== "ok") {
+      return leg.status === "none"
+        ? { status: "no-fare", leg: "return", from: route.returnDate, to: route.returnDate }
+        : { status: "failed", reason: leg.reason };
+    }
     inbound = leg.fare;
   }
 
@@ -111,6 +122,14 @@ export async function refreshRyanairPrice(
       autoFlights,
     },
   };
+}
+
+/** "Ryanair nie sprzedaje wylotu z KRK 5 lis 2026." for the leg without a fare. */
+export function noFareText(iata: string, noFare: NoFareLeg): string {
+  const dates = noFare.from === noFare.to ? formatDate(noFare.from) : `${formatDate(noFare.from)} – ${formatDate(noFare.to)}`;
+  return noFare.leg === "outbound"
+    ? `Ryanair nie sprzedaje lotu KRK → ${iata} ${dates}.`
+    : `Ryanair nie sprzedaje powrotu ${iata} → KRK ${dates}.`;
 }
 
 /** "FR3799, 23 lis 2026" for one leg, legs joined with " + ". */

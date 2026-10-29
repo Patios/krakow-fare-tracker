@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CalendarDays, RefreshCw } from "lucide-react";
-import { formatAutoFlights } from "@/lib/fare-refresh";
+import { formatAutoFlights, noFareText, type NoFareLeg } from "@/lib/fare-refresh";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { FlightDayCheck } from "@/components/flight-day-check";
 import { AIRLINE_LABEL } from "@/lib/airports";
@@ -28,6 +28,7 @@ export function RouteCard({
   onDeleteLog,
   refreshing,
   refreshNote,
+  noFare,
   onRefresh,
   onCalendar,
   autoRefresh,
@@ -42,6 +43,7 @@ export function RouteCard({
   onEdit: () => void;
   refreshing: boolean;
   refreshNote: string | null;
+  noFare: NoFareLeg | null;
   onRefresh: () => void;
   onCalendar: () => void;
   autoRefresh: boolean;
@@ -212,6 +214,11 @@ export function RouteCard({
           </p>
         ) : null}
         {rangeNote ? <p className="text-sm text-muted-foreground">{rangeNote}</p> : null}
+        {noFare && !refreshNote ? (
+          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+            {noFareText(route.destinationIata, noFare)} Cena Ryanair na karcie pochodzi z wcześniejszego wpisu.
+          </p>
+        ) : null}
         {refreshNote ? (
           <p role="status" className="text-sm text-muted-foreground">
             {refreshNote}
@@ -325,7 +332,9 @@ export function RouteCard({
 }
 
 function AutoSource({ log }: { log: PriceLog }) {
-  if (!log.autoFlights) return null;
+  if (!log.autoFlights) {
+    return <span className="mt-0.5 block text-xs text-muted-foreground">Wpisane ręcznie</span>;
+  }
   const flights = formatAutoFlights(log.autoFlights);
   return (
     <span className="mt-0.5 block text-xs text-muted-foreground">

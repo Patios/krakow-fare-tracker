@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatAutoFlights, parseRyanairCheapest, refreshRyanairPrice } from "./fare-refresh";
+import { formatAutoFlights, noFareText, parseRyanairCheapest, refreshRyanairPrice } from "./fare-refresh";
 import type { PriceLog, WatchedRoute } from "./types";
 
 const TODAY = "2026-10-27";
@@ -102,12 +102,17 @@ test("a range starting in the past is searched from today, a finished one is ski
 
 test("no fare on sale, a Wizz-only route and a missing return fare save nothing", async () => {
   const empty = mockFetch({});
-  assert.deepEqual(await refreshRyanairPrice(route(), [], TODAY, empty.fetchImpl), { status: "no-fare" });
+  assert.deepEqual(await refreshRyanairPrice(route(), [], TODAY, empty.fetchImpl), {
+    status: "no-fare",
+    leg: "outbound",
+    from: "2026-12-01",
+    to: "2026-12-31",
+  });
 
   const withoutReturn = mockFetch({ KRK: { fares: [fare("2026-12-03", 202.41)] } });
   assert.deepEqual(
-    await refreshRyanairPrice(route({ returnDate: "2027-01-05" }), [], TODAY, withoutReturn.fetchImpl),
-    { status: "no-fare" },
+    await refreshRyanairPrice(route({ outboundTo: null, outboundFrom: "2026-12-03", returnDate: "2027-01-05" }), [], TODAY, withoutReturn.fetchImpl),
+    { status: "no-fare", leg: "return", from: "2027-01-05", to: "2027-01-05" },
   );
 
   const wizzOnly = mockFetch({});
@@ -142,4 +147,15 @@ test("the same price for the same flights on the same day is not saved twice", a
 test("auto flights read as flight number and date per leg", () => {
   assert.equal(formatAutoFlights("FR2589 2026-12-03"), "FR2589, 3 gru 2026");
   assert.equal(formatAutoFlights(null), null);
+});
+
+test("the missing leg names the day and the direction", () => {
+  assert.equal(
+    noFareText("MXP", { leg: "outbound", from: "2026-11-05", to: "2026-11-05" }),
+    "Ryanair nie sprzedaje lotu KRK → MXP 5 lis 2026.",
+  );
+  assert.equal(
+    noFareText("MXP", { leg: "return", from: "2026-11-06", to: "2026-11-06" }),
+    "Ryanair nie sprzedaje powrotu MXP → KRK 6 lis 2026.",
+  );
 });

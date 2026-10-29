@@ -36,6 +36,7 @@ import {
 } from "@/lib/cloud";
 import {
   AUTO_INTERVAL_HOURS,
+  currentNoFare,
   dueRouteIds,
   getAutoRefreshServerSnapshot,
   getAutoRefreshSnapshot,
@@ -43,11 +44,12 @@ import {
   parseAutoRefresh,
   readAutoRefresh,
   recordChecks,
+  recordNoFare,
   setAutoInterval,
   subscribeAutoRefresh,
 } from "@/lib/auto-refresh";
 import { applyPickedFlights, type PickedLeg } from "@/lib/fare-calendar";
-import { refreshRyanairPrice, type RefreshOutcome } from "@/lib/fare-refresh";
+import { noFareText, refreshRyanairPrice, type RefreshOutcome } from "@/lib/fare-refresh";
 import { formatPln, todayIso } from "@/lib/format";
 import { lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "@/lib/routes";
 import {
@@ -280,7 +282,9 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
         let note: string;
         try {
           const outcome = await refreshRyanairPrice(route, latest.data.logs, today);
-          note = refreshNote(outcome);
+          note = refreshNote(outcome, route.destinationIata);
+          if (outcome.status === "no-fare") recordNoFare(route, outcome);
+          else if (outcome.status === "saved" || outcome.status === "unchanged") recordNoFare(route, null);
           if (outcome.status === "saved") {
             const current = interpretSnapshot(getSnapshot());
             if (current.status === "ready" && current.data.routes.some((item) => item.id === id)) {
@@ -514,6 +518,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                   }}
                   refreshing={refreshing.has(route.id)}
                   refreshNote={refreshNotes[route.id] ?? null}
+                  noFare={currentNoFare(route, autoSettings)}
                   onRefresh={() => void refreshPrices([route.id])}
                   autoRefresh={route.autoRefresh === true}
                   autoIntervalHours={autoSettings.intervalHours}
@@ -828,14 +833,14 @@ function checkedLabel(lastChecked: string | undefined, next: Date | null) {
   return next ? `Sprawdzono ${lastText}, następnie ok. ${clockFormatter.format(next)}` : `Sprawdzono ${lastText}`;
 }
 
-function refreshNote(outcome: RefreshOutcome): string {
+function refreshNote(outcome: RefreshOutcome, iata: string): string {
   switch (outcome.status) {
     case "saved":
       return `Zapisano ${formatPln(outcome.log.amount)} z Ryanair.`;
     case "unchanged":
       return `Bez zmian: ${formatPln(outcome.amount)}.`;
     case "no-fare":
-      return "Ryanair nie sprzedaje biletów na ten termin.";
+      return `${noFareText(iata, outcome)} Nowa cena nie została zapisana.`;
     case "past":
       return "Ten termin już minął.";
     case "not-served":
