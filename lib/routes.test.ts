@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AIRLINE_LABEL, RYANAIR_IATA, WIZZ_IATA, airlinesFor, destinationByIata, destinations } from "./airports";
 import { flightClock, formatFlightTimes, parseAmount, parseTimeInput } from "./format";
-import { latestLogsByAirline, lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "./routes";
+import { latestLogsByAirline, lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes, tripEnded } from "./routes";
 import { ryanairSearchUrl, wizzairSearchUrl } from "./search-urls";
 import { parseStore } from "./storage";
 import type { Airline, PriceLog, WatchedRoute } from "./types";
@@ -158,9 +158,18 @@ test("routes sort by the lowest logged price and flag a drop against the previou
   ];
 
   assert.deepEqual(
-    sortRoutes(routes, logs).map((item) => item.id),
+    sortRoutes(routes, logs, "2026-10-29").map((item) => item.id),
     ["cheap", "dear", "empty"],
   );
+  assert.deepEqual(
+    sortRoutes([...routes, route({ id: "flown", destinationIata: "AGP", outboundFrom: "2026-10-20" })], logs, "2026-10-29").map(
+      (item) => item.id,
+    ),
+    ["cheap", "dear", "empty", "flown"],
+  );
+  assert.equal(tripEnded(route({ id: "r", destinationIata: "AGP", outboundFrom: "2026-10-31", returnDate: "2026-11-07" }), "2026-10-31"), false);
+  assert.equal(tripEnded(route({ id: "r", destinationIata: "AGP", outboundFrom: "2026-10-31", returnDate: "2026-11-07" }), "2026-11-02"), true);
+  assert.equal(tripEnded(route({ id: "r", destinationIata: "AGP", outboundFrom: "2026-10-30", outboundTo: "2026-11-04" }), "2026-11-02"), false);
   assert.deepEqual(
     sortRoutes(
       [
@@ -169,6 +178,7 @@ test("routes sort by the lowest logged price and flag a drop against the previou
         route({ id: "cheap", destinationIata: "BGY" }),
       ],
       logs,
+      "2026-10-29",
     ).map((item) => item.id),
     ["empty", "cheap", "dear"],
   );

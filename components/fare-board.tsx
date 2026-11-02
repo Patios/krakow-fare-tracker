@@ -137,7 +137,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const [refreshSummary, setRefreshSummary] = useState<string | null>(null);
 
   const ready = view.status === "ready" ? view.data : null;
-  const sorted = ready ? sortRoutes(ready.routes, ready.logs) : [];
+  const sorted = ready ? sortRoutes(ready.routes, ready.logs, todayIso()) : [];
   const filtered = sorted.filter((route) =>
     matchesRouteFilter(route, ready?.logs ?? [], { query, airlines, dropsOnly }),
   );

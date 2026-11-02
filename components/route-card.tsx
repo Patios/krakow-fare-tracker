@@ -8,7 +8,7 @@ import { FlightDayCheck } from "@/components/flight-day-check";
 import { AIRLINE_LABEL } from "@/lib/airports";
 import { lookupDestination } from "@/lib/network-refresh";
 import { flightClock, formatDate, formatFlightTimes, formatPln, formatTripDates, todayIso } from "@/lib/format";
-import { latestLogsByAirline, lowestLoggedPrice, orderedLogs, priceDrop } from "@/lib/routes";
+import { latestLogsByAirline, lowestLoggedPrice, orderedLogs, lastOutboundDay, priceDrop, tripEnded } from "@/lib/routes";
 import { openAirlineWindow } from "@/lib/airline-window";
 import { ryanairSearchUrl, wizzairSearchUrl, wizzRangeNote } from "@/lib/search-urls";
 import type { Airline, PriceLog, WatchedRoute } from "@/lib/types";
@@ -78,9 +78,10 @@ export function RouteCard({
       firstClock(routeLogs, "returnDepart", "returnArrive")
     : null;
   const sharedClocks = !airlineOffers || !airlineOffers.some((offer) => offer.log && formatFlightTimes(offer.log));
-  const past = route.outboundFrom < todayIso();
+  const ended = tripEnded(route, todayIso());
+  const past = !ended && route.outboundFrom < todayIso();
   const servedByRyanair = destination?.airlines.includes("ryanair") ?? false;
-  const refreshable = servedByRyanair || wizzPriced;
+  const refreshable = !ended && (servedByRyanair || wizzPriced);
   const hasRyanairLog = routeLogs.some((log) => log.airline === "ryanair");
   const rangeNote = destination?.airlines.includes("wizzair") ? wizzRangeNote(route) : null;
   const outboundFlights = dayFlights.find((leg) => leg.leg === "outbound") ?? null;
@@ -100,7 +101,14 @@ export function RouteCard({
     : [];
 
   const notices: { key: string; tone: "warn" | "info" | "good"; text: string }[] = [];
-  if (noFare && !refreshNote) {
+  if (ended) {
+    notices.push({
+      key: "ended",
+      tone: "info",
+      text: `Termin minął, wylot był ${formatDate(lastOutboundDay(route))}. Historia cen zostaje na karcie.`,
+    });
+  }
+  if (noFare && !refreshNote && !ended) {
     notices.push({
       key: "no-fare",
       tone: "warn",
@@ -115,17 +123,22 @@ export function RouteCard({
       text: `Ostatni wpis jest niższy niż poprzedni (${formatPln(drop.previous.amount)}, ${AIRLINE_LABEL[drop.previous.airline]}, ${formatDate(drop.previous.checkedOn)}).`,
     });
   }
-  if (past) notices.push({ key: "past", tone: "info", text: "Data wylotu już minęła. Wyszukiwarka linii może jej nie pokazać." });
-  if (rangeNote) notices.push({ key: "range", tone: "info", text: rangeNote });
+  if (past) notices.push({ key: "past", tone: "info", text: "Początek terminu już minął. Ceny są szukane od dziś." });
+  if (rangeNote && !ended) notices.push({ key: "range", tone: "info", text: rangeNote });
 
   return (
-    <Card id={id} className={cn("scroll-mt-4 gap-0 pt-0 pb-0", drop && "ring-emerald-700/30")}>
-      <div aria-hidden className={cn("h-1.5 w-full", airlineStripe(destination?.airlines))} />
-      <CardHeader className="pt-4 pb-3">
+    <Card id={id} className={cn("scroll-mt-4 gap-0 pt-0 pb-0", drop && !ended && "ring-emerald-700/30")}>
+      <div aria-hidden className={cn("h-1.5 w-full", ended ? "bg-border" : airlineStripe(destination?.airlines))} />
+      <CardHeader className={cn("pt-4 pb-3", ended && "opacity-60")}>
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="min-w-0">
-            <p className="font-heading text-xs font-semibold tracking-[0.16em] text-brand-ink uppercase">
+            <p className="flex flex-wrap items-center gap-2 font-heading text-xs font-semibold tracking-[0.16em] text-brand-ink uppercase">
               KRK → {route.destinationIata}
+              {ended ? (
+                <Badge variant="outline" className="font-sans tracking-normal normal-case">
+                  Termin minął
+                </Badge>
+              ) : null}
             </p>
             <h2 className="font-heading text-2xl leading-tight font-semibold tracking-wide">
               {destination?.city ?? route.destinationIata}
@@ -149,7 +162,7 @@ export function RouteCard({
 
       <CardContent className="grid gap-4 pb-4">
         {airlineOffers ? (
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className={cn("grid gap-3 sm:grid-cols-2", ended && "opacity-60")}>
             {airlineOffers.map((offer) => {
               const times = offer.log ? formatFlightTimes(offer.log) : null;
               return (
@@ -173,9 +186,11 @@ export function RouteCard({
                     <WizzEstimate estimate={wizzEstimate} />
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      {offer.airline === "ryanair" || wizzPriced
-                        ? "Brak ceny. Pobierz ją przyciskiem „Odśwież cenę”."
-                        : "Brak ceny. Po sprawdzeniu u linii wpisz kwotę."}
+                      {ended
+                        ? "Brak zapisanej ceny."
+                        : offer.airline === "ryanair" || wizzPriced
+                          ? "Brak ceny. Pobierz ją przyciskiem „Odśwież cenę”."
+                          : "Brak ceny. Po sprawdzeniu u linii wpisz kwotę."}
                     </p>
                   )}
                 </li>
@@ -184,14 +199,14 @@ export function RouteCard({
           </ul>
         ) : null}
 
-        <div className="grid overflow-hidden rounded-xl border sm:grid-cols-2">
+        <div className={cn("grid overflow-hidden rounded-xl border sm:grid-cols-2", ended && "opacity-60")}>
           <Leg
             icon={<PlaneTakeoff />}
             title={`Wylot · KRK → ${route.destinationIata}`}
             date={formatTripDates(route.outboundFrom, route.outboundTo)}
             clock={sharedClocks ? outboundClock : null}
             flights={outboundFlights?.flights ?? null}
-            missing={noFare?.missing.some((leg) => leg.leg === "outbound") ?? false}
+            missing={!ended && (noFare?.missing.some((leg) => leg.leg === "outbound") ?? false)}
             wizz={wizzEstimate?.legs.find((leg) => leg.leg === "outbound") ?? null}
           />
           <Leg
@@ -200,7 +215,7 @@ export function RouteCard({
             date={route.returnDate ? formatDate(route.returnDate) : "W jedną stronę"}
             clock={sharedClocks ? returnClock : null}
             flights={returnFlights?.flights ?? null}
-            missing={noFare?.missing.some((leg) => leg.leg === "return") ?? false}
+            missing={!ended && (noFare?.missing.some((leg) => leg.leg === "return") ?? false)}
             wizz={wizzEstimate?.legs.find((leg) => leg.leg === "return") ?? null}
             className="border-t sm:border-t-0 sm:border-l"
           />
@@ -226,7 +241,7 @@ export function RouteCard({
           </div>
         ) : null}
 
-        {destination ? (
+        {destination && !ended ? (
           <FlightDayCheck
             trip={{
               destinationIata: route.destinationIata,
@@ -241,41 +256,43 @@ export function RouteCard({
       </CardContent>
 
       <CardFooter className="flex-col items-stretch gap-3 border-t py-3">
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          {links.map((link) => (
-            <Button
-              key={link.airline}
-              type="button"
-              className={cn(
-                "col-span-2 h-9 gap-2 px-3 font-semibold",
-                link.airline === "ryanair"
-                  ? "bg-ryanair-yellow text-ryanair hover:bg-ryanair-yellow/90"
-                  : "bg-wizz text-white hover:bg-wizz/90",
-              )}
-              onClick={() => {
-                const opened = openAirlineWindow(link.href, link.airline);
-                onCheck({ airline: link.airline, href: link.href, blocked: !opened });
-              }}
-            >
-              <AirlineMark airline={link.airline} variant="glyph" />
-              Sprawdź dziś · {link.label}
+        {ended ? null : (
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            {links.map((link) => (
+              <Button
+                key={link.airline}
+                type="button"
+                className={cn(
+                  "col-span-2 h-9 gap-2 px-3 font-semibold",
+                  link.airline === "ryanair"
+                    ? "bg-ryanair-yellow text-ryanair hover:bg-ryanair-yellow/90"
+                    : "bg-wizz text-white hover:bg-wizz/90",
+                )}
+                onClick={() => {
+                  const opened = openAirlineWindow(link.href, link.airline);
+                  onCheck({ airline: link.airline, href: link.href, blocked: !opened });
+                }}
+              >
+                <AirlineMark airline={link.airline} variant="glyph" />
+                Sprawdź dziś · {link.label}
+              </Button>
+            ))}
+            {refreshable ? (
+              <Button type="button" variant="outline" className="h-9" onClick={onRefresh} disabled={refreshing}>
+                <RefreshCw className={refreshing ? "animate-spin" : undefined} />
+                {refreshing ? "Pobieram…" : "Odśwież cenę"}
+              </Button>
+            ) : null}
+            {servedByRyanair ? (
+              <Button type="button" variant="outline" className="h-9" onClick={onCalendar}>
+                <CalendarDays /> Kalendarz cen
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" className="col-span-2 h-9" onClick={onLogPrice} disabled={!destination}>
+              Zapisz cenę
             </Button>
-          ))}
-          {refreshable ? (
-            <Button type="button" variant="outline" className="h-9" onClick={onRefresh} disabled={refreshing}>
-              <RefreshCw className={refreshing ? "animate-spin" : undefined} />
-              {refreshing ? "Pobieram…" : "Odśwież cenę"}
-            </Button>
-          ) : null}
-          {servedByRyanair ? (
-            <Button type="button" variant="outline" className="h-9" onClick={onCalendar}>
-              <CalendarDays /> Kalendarz cen
-            </Button>
-          ) : null}
-          <Button type="button" variant="outline" className="col-span-2 h-9" onClick={onLogPrice} disabled={!destination}>
-            Zapisz cenę
-          </Button>
-        </div>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm">
           {refreshable ? (
             <label className="flex items-center gap-2 text-muted-foreground">

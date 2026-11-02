@@ -46,7 +46,22 @@ export function priceDrop(logsNewestFirst: PriceLog[]): PriceDrop | null {
   };
 }
 
-export function sortRoutes(routes: WatchedRoute[], logs: PriceLog[]): WatchedRoute[] {
+/** The last possible outbound day is before today, so the trip can no longer be booked. */
+export function tripEnded(route: WatchedRoute, today: string): boolean {
+  return lastOutboundDay(route) < today;
+}
+
+export function lastOutboundDay(route: WatchedRoute): string {
+  return route.outboundTo ?? route.outboundFrom;
+}
+
+/** Upcoming trips first, ended ones at the end in the same order. */
+export function sortRoutes(routes: WatchedRoute[], logs: PriceLog[], today: string): WatchedRoute[] {
+  const sorted = sortByPrice(routes, logs);
+  return [...sorted.filter((route) => !tripEnded(route, today)), ...sorted.filter((route) => tripEnded(route, today))];
+}
+
+function sortByPrice(routes: WatchedRoute[], logs: PriceLog[]): WatchedRoute[] {
   const label = (route: WatchedRoute) =>
     lookupDestination(route.destinationIata)?.city ?? route.destinationIata;
 
