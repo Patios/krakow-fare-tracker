@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { AIRLINE_LABEL } from "@/lib/airports";
 import { openAirlineWindow } from "@/lib/airline-window";
-import { formatDate, formatFlightTimes, formatLegPrices, formatPln, todayIso } from "@/lib/format";
+import { flightClock, formatDate, formatFlightTimes, formatLegPrices, formatPln, todayIso } from "@/lib/format";
 import { orderedLogs } from "@/lib/routes";
 import { wizzRangeNote } from "@/lib/search-urls";
 import type { Airline, PriceDraft, PriceLog, SearchTrip, WatchedRoute } from "@/lib/types";
@@ -49,6 +49,14 @@ export function CheckFareDialog({
   const past = route.outboundFrom < todayIso();
   const rangeNote = airline === "wizzair" ? wizzRangeNote(route) : null;
   const history = orderedLogs(logs, route.id);
+  const latest = history.find((entry) => entry.airline === airline);
+  const outboundClock = flightClock(
+    route.outboundDepart ?? latest?.outboundDepart ?? null,
+    route.outboundArrive ?? latest?.outboundArrive ?? null,
+  );
+  const returnClock = route.returnDate
+    ? flightClock(route.returnDepart ?? latest?.returnDepart ?? null, route.returnArrive ?? latest?.returnArrive ?? null)
+    : null;
 
   function reopen() {
     setBlocked(!openAirlineWindow(href, airline));
@@ -60,16 +68,21 @@ export function CheckFareDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-heading text-lg">
             <AirlineMark airline={airline} className="size-6" />
-            Sprawdź dziś · {label}
+            Sprawdzana cena · {label}
           </DialogTitle>
           <DialogDescription>
-            {city}. {label} nie pozwala wstawić swojej strony do tej aplikacji, więc wyszukiwanie jest w
-            osobnym oknie przeglądarki. Cenę i godziny lotu, które tam widzisz, wpisz poniżej — trafią od razu
-            do historii tej trasy.
+            {city}. W oknie {label} szukasz ceny tego lotu. Kwotę i godziny, które tam widzisz, wpisz poniżej.
           </DialogDescription>
         </DialogHeader>
 
-        <TripDateSummary trip={trip} destinationIata={route.destinationIata} />
+        <TripDateSummary
+          trip={trip}
+          destinationIata={route.destinationIata}
+          outboundClock={outboundClock}
+          returnClock={returnClock}
+          outboundNumber={flightNumber(latest?.autoFlights, route.outboundFrom)}
+          returnNumber={flightNumber(latest?.autoFlights, route.returnDate)}
+        />
 
         {blocked ? (
           <p role="alert" className="text-sm text-destructive">
@@ -139,4 +152,13 @@ export function CheckFareDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function flightNumber(autoFlights: string | null | undefined, date: string | null): string | null {
+  if (!autoFlights || !date) return null;
+  for (const part of autoFlights.split(";")) {
+    const [number, flightDate] = part.trim().split(/\s+/);
+    if (flightDate === date && number && number !== "W6") return number;
+  }
+  return null;
 }

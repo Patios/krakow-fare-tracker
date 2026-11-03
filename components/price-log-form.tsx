@@ -14,28 +14,78 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AIRLINE_LABEL } from "@/lib/airports";
-import { formatDate, formatPln, formatTripDates, isIsoDate, parseAmount, parseTimeInput, roundMoney, todayIso } from "@/lib/format";
+import { formatFlightDay, formatPln, isIsoDate, parseAmount, parseTimeInput, roundMoney, todayIso } from "@/lib/format";
 import type { Airline, PriceDraft, SearchTrip } from "@/lib/types";
 
-export function TripDateSummary({ trip, destinationIata }: { trip: SearchTrip; destinationIata: string }) {
+export function TripDateSummary({
+  trip,
+  destinationIata,
+  outboundClock = null,
+  returnClock = null,
+  outboundNumber = null,
+  returnNumber = null,
+}: {
+  trip: SearchTrip;
+  destinationIata: string;
+  outboundClock?: string | null;
+  returnClock?: string | null;
+  outboundNumber?: string | null;
+  returnNumber?: string | null;
+}) {
+  const ranged = trip.outboundTo != null && trip.outboundTo !== trip.outboundFrom;
   return (
-    <div className="grid gap-1 rounded-lg bg-muted px-3 py-2 text-sm">
-      <p>
-        <span className="text-muted-foreground">Wylot · </span>
-        <span className="font-medium">{formatTripDates(trip.outboundFrom, trip.outboundTo)}</span>
-        <span className="text-muted-foreground"> · KRK → {destinationIata}</span>
+    <div className="grid gap-2" aria-label="Lot, którego cenę sprawdzasz">
+      <FlightLine
+        title="Wylot"
+        route={`KRK → ${destinationIata}`}
+        day={formatFlightDay(trip.outboundFrom)}
+        note={
+          ranged && trip.outboundTo
+            ? `Okno linii otwiera ten dzień. Zapisany zakres trwa do ${formatFlightDay(trip.outboundTo)}.`
+            : null
+        }
+        clock={outboundClock}
+        number={outboundNumber}
+      />
+      {trip.returnDate ? (
+        <FlightLine
+          title="Powrót"
+          route={`${destinationIata} → KRK`}
+          day={formatFlightDay(trip.returnDate)}
+          clock={returnClock}
+          number={returnNumber}
+        />
+      ) : (
+        <p className="rounded-xl border px-3 py-2.5 text-sm text-muted-foreground">Powrót: w jedną stronę</p>
+      )}
+    </div>
+  );
+}
+
+function FlightLine({
+  title,
+  route,
+  day,
+  note,
+  clock,
+  number,
+}: {
+  title: string;
+  route: string;
+  day: string;
+  note?: string | null;
+  clock?: string | null;
+  number?: string | null;
+}) {
+  const detail = [clock, number].filter(Boolean).join(" · ");
+  return (
+    <div className="rounded-xl border px-3 py-2.5">
+      <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        {title} · {route}
       </p>
-      <p>
-        <span className="text-muted-foreground">Powrót · </span>
-        {trip.returnDate ? (
-          <>
-            <span className="font-medium">{formatDate(trip.returnDate)}</span>
-            <span className="text-muted-foreground"> · {destinationIata} → KRK</span>
-          </>
-        ) : (
-          <span className="font-medium">W jedną stronę</span>
-        )}
-      </p>
+      <p className="font-heading text-xl font-semibold capitalize">{day}</p>
+      {detail ? <p className="text-sm text-muted-foreground tabular-nums">{detail}</p> : null}
+      {note ? <p className="mt-1 text-sm text-muted-foreground">{note}</p> : null}
     </div>
   );
 }
@@ -71,8 +121,11 @@ export function PriceLogForm({
   const [error, setError] = useState("");
   const today = todayIso();
   const items = airlines.map((item) => ({ value: item, label: AIRLINE_LABEL[item] }));
-  const outboundDate = formatTripDates(trip.outboundFrom, trip.outboundTo);
-  const returnDate = trip.returnDate ? formatDate(trip.returnDate) : null;
+  const outboundDate =
+    trip.outboundTo && trip.outboundTo !== trip.outboundFrom
+      ? `${formatFlightDay(trip.outboundFrom)} – ${formatFlightDay(trip.outboundTo)}`
+      : formatFlightDay(trip.outboundFrom);
+  const returnDate = trip.returnDate ? formatFlightDay(trip.returnDate) : null;
   const outboundFare = hasReturn ? parseAmount(outboundAmount) : null;
   const returnFare = hasReturn ? parseAmount(returnAmount) : null;
   const total = outboundFare != null && returnFare != null ? roundMoney(outboundFare + returnFare) : null;
@@ -180,19 +233,6 @@ export function PriceLogForm({
         </div>
       )}
 
-      <div className="grid gap-1.5">
-        <Label htmlFor={`checked-on${idPrefix}`}>Data sprawdzenia</Label>
-        <Input
-          id={`checked-on${idPrefix}`}
-          type="date"
-          value={checkedOn}
-          max={today}
-          onChange={(event) => setCheckedOn(event.target.value)}
-          className="h-10"
-          required
-        />
-      </div>
-
       <p className="text-sm text-muted-foreground">Godziny z karty lotu u linii. Puste pole zostaje puste.</p>
 
       <section className="grid gap-3 rounded-xl border p-3">
@@ -251,6 +291,20 @@ export function PriceLogForm({
           <span className="text-muted-foreground"> · tyle zapisze się w historii</span>
         </p>
       ) : null}
+
+      <div className="grid gap-1.5">
+        <Label htmlFor={`checked-on${idPrefix}`}>Data sprawdzenia</Label>
+        <p className="text-sm text-muted-foreground">Dzień, w którym patrzysz na cenę.</p>
+        <Input
+          id={`checked-on${idPrefix}`}
+          type="date"
+          value={checkedOn}
+          max={today}
+          onChange={(event) => setCheckedOn(event.target.value)}
+          className="h-10"
+          required
+        />
+      </div>
 
       {error ? (
         <p role="alert" className="text-sm text-destructive">

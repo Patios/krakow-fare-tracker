@@ -4,6 +4,13 @@ const dateFormatter = new Intl.DateTimeFormat("pl-PL", {
   year: "numeric",
 });
 
+const flightDayFormatter = new Intl.DateTimeFormat("pl-PL", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
 const moneyFormatter = new Intl.NumberFormat("pl-PL", {
   style: "currency",
   currency: "PLN",
@@ -30,6 +37,12 @@ export function isIsoDate(value: string): boolean {
 export function formatDate(iso: string): string {
   const [year, month, day] = iso.split("-").map(Number);
   return dateFormatter.format(new Date(year, month - 1, day));
+}
+
+/** "poniedziałek, 23 listopada 2026" — the flight day, not the day the price was checked. */
+export function formatFlightDay(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  return flightDayFormatter.format(new Date(year, month - 1, day));
 }
 
 export function formatTripDates(from: string, to: string | null): string {

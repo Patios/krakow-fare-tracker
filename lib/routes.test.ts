@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AIRLINE_LABEL, RYANAIR_IATA, WIZZ_IATA, airlinesFor, destinationByIata, destinations } from "./airports";
-import { flightClock, formatFlightTimes, parseAmount, parseTimeInput } from "./format";
+import { flightClock, formatFlightDay, formatFlightTimes, parseAmount, parseTimeInput } from "./format";
 import { latestLogsByAirline, lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes, tripEnded } from "./routes";
 import { ryanairSearchUrl, wizzairSearchUrl } from "./search-urls";
 import { parseStore } from "./storage";
@@ -238,6 +238,10 @@ test("a higher latest price is not marked as a drop", () => {
     log({ id: "new", routeId: "r", amount: 130, checkedOn: "2026-10-20" }),
   ];
   assert.equal(priceDrop(orderedLogs(logs, "r")), null);
+});
+
+test("a flight day names the weekday", () => {
+  assert.equal(formatFlightDay("2026-11-23"), "poniedziałek, 23 listopada 2026");
 });
 
 test("amount parsing accepts Polish zloty input", () => {
