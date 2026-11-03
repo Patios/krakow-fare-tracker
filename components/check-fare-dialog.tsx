@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AirlineMark } from "@/components/airline-mark";
-import { PriceLogForm } from "@/components/price-log-form";
+import { PriceLogForm, TripDateSummary } from "@/components/price-log-form";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,10 +13,10 @@ import {
 } from "@/components/ui/dialog";
 import { AIRLINE_LABEL } from "@/lib/airports";
 import { openAirlineWindow } from "@/lib/airline-window";
-import { formatDate, formatFlightTimes, formatPln, todayIso } from "@/lib/format";
+import { formatDate, formatFlightTimes, formatLegPrices, formatPln, todayIso } from "@/lib/format";
 import { orderedLogs } from "@/lib/routes";
 import { wizzRangeNote } from "@/lib/search-urls";
-import type { Airline, PriceDraft, PriceLog, WatchedRoute } from "@/lib/types";
+import type { Airline, PriceDraft, PriceLog, SearchTrip, WatchedRoute } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function CheckFareDialog({
@@ -39,8 +39,13 @@ export function CheckFareDialog({
   onSave: (entry: PriceDraft) => boolean;
 }) {
   const [blocked, setBlocked] = useState(popupBlocked);
-  const [savedAmount, setSavedAmount] = useState<number | null>(null);
+  const [saved, setSaved] = useState<PriceDraft | null>(null);
   const label = AIRLINE_LABEL[airline];
+  const trip: SearchTrip = {
+    outboundFrom: route.outboundFrom,
+    outboundTo: route.outboundTo,
+    returnDate: route.returnDate,
+  };
   const past = route.outboundFrom < todayIso();
   const rangeNote = airline === "wizzair" ? wizzRangeNote(route) : null;
   const history = orderedLogs(logs, route.id);
@@ -63,6 +68,8 @@ export function CheckFareDialog({
             do historii tej trasy.
           </DialogDescription>
         </DialogHeader>
+
+        <TripDateSummary trip={trip} destinationIata={route.destinationIata} />
 
         {blocked ? (
           <p role="alert" className="text-sm text-destructive">
@@ -88,11 +95,22 @@ export function CheckFareDialog({
           {blocked ? `Otwórz okno ${label}` : `Pokaż okno ${label}`}
         </Button>
 
-        {savedAmount != null ? (
+        {saved ? (
           <p role="status" className="text-sm text-brand-ink">
-            Zapisano {formatPln(savedAmount)} w historii.
+            Zapisano {formatPln(saved.amount)}
+            {formatLegPrices(saved) ? ` (${formatLegPrices(saved)})` : ""} w historii.
           </p>
         ) : null}
+
+        <PriceLogForm
+          airlines={[airline]}
+          trip={trip}
+          idPrefix="-check"
+          submitLabel="Zapisz w historii"
+          onCancel={() => onOpenChange(false)}
+          onSave={onSave}
+          onSaved={setSaved}
+        />
 
         <div className="grid gap-2">
           <h3 className="text-sm font-medium">Historia tej trasy</h3>
@@ -100,29 +118,24 @@ export function CheckFareDialog({
             <p className="text-sm text-muted-foreground">Nie ma jeszcze wpisów.</p>
           ) : (
             <ul className="grid gap-1.5">
-              {history.map((entry) => (
-                <li key={entry.id} className="flex items-center gap-1.5 text-sm">
-                  <span className="font-medium tabular-nums">{formatPln(entry.amount)}</span>
-                  <AirlineMark airline={entry.airline} className="size-5" />
-                  <span className="text-muted-foreground">
-                    {AIRLINE_LABEL[entry.airline]} · {formatDate(entry.checkedOn)}
-                    {formatFlightTimes(entry) ? ` · ${formatFlightTimes(entry)}` : ""}
-                  </span>
-                </li>
-              ))}
+              {history.map((entry) => {
+                const legs = formatLegPrices(entry);
+                const times = formatFlightTimes(entry);
+                return (
+                  <li key={entry.id} className="flex items-center gap-1.5 text-sm">
+                    <span className="font-medium tabular-nums">{formatPln(entry.amount)}</span>
+                    <AirlineMark airline={entry.airline} className="size-5" />
+                    <span className="text-muted-foreground">
+                      {AIRLINE_LABEL[entry.airline]} · {formatDate(entry.checkedOn)}
+                      {legs ? ` · ${legs}` : ""}
+                      {times ? ` · ${times}` : ""}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
-
-        <PriceLogForm
-          airlines={[airline]}
-          hasReturn={route.returnDate != null}
-          idPrefix="-check"
-          submitLabel="Zapisz w historii"
-          onCancel={() => onOpenChange(false)}
-          onSave={onSave}
-          onSaved={setSavedAmount}
-        />
       </DialogContent>
     </Dialog>
   );

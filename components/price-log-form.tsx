@@ -14,12 +14,35 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AIRLINE_LABEL } from "@/lib/airports";
-import { isIsoDate, parseAmount, parseTimeInput, todayIso } from "@/lib/format";
-import type { Airline, PriceDraft } from "@/lib/types";
+import { formatDate, formatPln, formatTripDates, isIsoDate, parseAmount, parseTimeInput, roundMoney, todayIso } from "@/lib/format";
+import type { Airline, PriceDraft, SearchTrip } from "@/lib/types";
+
+export function TripDateSummary({ trip, destinationIata }: { trip: SearchTrip; destinationIata: string }) {
+  return (
+    <div className="grid gap-1 rounded-lg bg-muted px-3 py-2 text-sm">
+      <p>
+        <span className="text-muted-foreground">Wylot · </span>
+        <span className="font-medium">{formatTripDates(trip.outboundFrom, trip.outboundTo)}</span>
+        <span className="text-muted-foreground"> · KRK → {destinationIata}</span>
+      </p>
+      <p>
+        <span className="text-muted-foreground">Powrót · </span>
+        {trip.returnDate ? (
+          <>
+            <span className="font-medium">{formatDate(trip.returnDate)}</span>
+            <span className="text-muted-foreground"> · {destinationIata} → KRK</span>
+          </>
+        ) : (
+          <span className="font-medium">W jedną stronę</span>
+        )}
+      </p>
+    </div>
+  );
+}
 
 export function PriceLogForm({
   airlines,
-  hasReturn,
+  trip,
   idPrefix = "",
   submitLabel = "Zapisz cenę",
   onCancel,
@@ -27,16 +50,19 @@ export function PriceLogForm({
   onSaved,
 }: {
   airlines: Airline[];
-  hasReturn: boolean;
+  trip: SearchTrip;
   idPrefix?: string;
   submitLabel?: string;
   onCancel: () => void;
   onSave: (entry: PriceDraft) => boolean;
-  onSaved?: (amount: number) => void;
+  onSaved?: (entry: PriceDraft) => void;
 }) {
+  const hasReturn = trip.returnDate != null;
   const onlyAirline = airlines.length === 1 ? airlines[0] : null;
   const [airline, setAirline] = useState<Airline | "">(onlyAirline ?? "");
   const [amount, setAmount] = useState("");
+  const [outboundAmount, setOutboundAmount] = useState("");
+  const [returnAmount, setReturnAmount] = useState("");
   const [checkedOn, setCheckedOn] = useState(todayIso());
   const [outboundDepart, setOutboundDepart] = useState("");
   const [outboundArrive, setOutboundArrive] = useState("");
@@ -45,6 +71,11 @@ export function PriceLogForm({
   const [error, setError] = useState("");
   const today = todayIso();
   const items = airlines.map((item) => ({ value: item, label: AIRLINE_LABEL[item] }));
+  const outboundDate = formatTripDates(trip.outboundFrom, trip.outboundTo);
+  const returnDate = trip.returnDate ? formatDate(trip.returnDate) : null;
+  const outboundFare = hasReturn ? parseAmount(outboundAmount) : null;
+  const returnFare = hasReturn ? parseAmount(returnAmount) : null;
+  const total = outboundFare != null && returnFare != null ? roundMoney(outboundFare + returnFare) : null;
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -57,10 +88,22 @@ export function PriceLogForm({
       setError("Ta linia nie lata na ten kierunek z Krakowa.");
       return;
     }
-    const parsed = parseAmount(amount);
-    if (parsed == null) {
-      setError("Podaj cenę większą od zera, maksymalnie z groszami. Waluta to PLN.");
-      return;
+    let parsed: number;
+    let legs: { outboundAmount: number; returnAmount: number } | null = null;
+    if (hasReturn) {
+      if (outboundFare == null || returnFare == null) {
+        setError("Podaj cenę wylotu i powrotu. Każda większa od zera, maksymalnie z groszami. Waluta to PLN.");
+        return;
+      }
+      parsed = roundMoney(outboundFare + returnFare);
+      legs = { outboundAmount: outboundFare, returnAmount: returnFare };
+    } else {
+      const single = parseAmount(amount);
+      if (single == null) {
+        setError("Podaj cenę większą od zera, maksymalnie z groszami. Waluta to PLN.");
+        return;
+      }
+      parsed = single;
     }
     if (!isIsoDate(checkedOn) || checkedOn > today) {
       setError("Data sprawdzenia nie może być z przyszłości.");
@@ -81,27 +124,29 @@ export function PriceLogForm({
       setError("Podaj godzinę w formacie gg:mm albo zostaw pole puste.");
       return;
     }
-    if (
-      !onSave({
-        airline: chosen,
-        amount: parsed,
-        checkedOn,
-        outboundDepart: times.outboundDepart,
-        outboundArrive: times.outboundArrive,
-        returnDepart: times.returnDepart,
-        returnArrive: times.returnArrive,
-      })
-    ) {
+    const entry: PriceDraft = {
+      airline: chosen,
+      amount: parsed,
+      checkedOn,
+      outboundDepart: times.outboundDepart,
+      outboundArrive: times.outboundArrive,
+      returnDepart: times.returnDepart,
+      returnArrive: times.returnArrive,
+      ...(legs ?? {}),
+    };
+    if (!onSave(entry)) {
       setError("Nie udało się zapisać ceny w tej przeglądarce.");
       return;
     }
     setAmount("");
+    setOutboundAmount("");
+    setReturnAmount("");
     setOutboundDepart("");
     setOutboundArrive("");
     setReturnDepart("");
     setReturnArrive("");
     setError("");
-    onSaved?.(parsed);
+    onSaved?.(entry);
   }
 
   return (
@@ -136,23 +181,6 @@ export function PriceLogForm({
       )}
 
       <div className="grid gap-1.5">
-        <Label htmlFor={`amount${idPrefix}`}>Kwota</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            id={`amount${idPrefix}`}
-            inputMode="decimal"
-            autoComplete="off"
-            placeholder="np. 149,99"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-            className="h-10"
-            required
-          />
-          <span className="text-sm font-medium">PLN</span>
-        </div>
-      </div>
-
-      <div className="grid gap-1.5">
         <Label htmlFor={`checked-on${idPrefix}`}>Data sprawdzenia</Label>
         <Input
           id={`checked-on${idPrefix}`}
@@ -165,9 +193,16 @@ export function PriceLogForm({
         />
       </div>
 
-      <fieldset className="grid gap-2">
-        <legend className="text-sm font-medium">Godziny lotu</legend>
-        <p className="text-sm text-muted-foreground">Z karty lotu u linii. Puste pole zostaje puste.</p>
+      <p className="text-sm text-muted-foreground">Godziny z karty lotu u linii. Puste pole zostaje puste.</p>
+
+      <section className="grid gap-3 rounded-xl border p-3">
+        <h3 className="text-sm font-medium">Wylot · {outboundDate}</h3>
+        <AmountField
+          id={`amount${idPrefix}`}
+          label={hasReturn ? "Kwota wylotu" : "Kwota"}
+          value={hasReturn ? outboundAmount : amount}
+          onChange={hasReturn ? setOutboundAmount : setAmount}
+        />
         <div className="grid gap-2 sm:grid-cols-2">
           <TimeField
             id={`outbound-depart${idPrefix}`}
@@ -182,7 +217,17 @@ export function PriceLogForm({
             onChange={setOutboundArrive}
           />
         </div>
-        {hasReturn ? (
+      </section>
+
+      {hasReturn && returnDate ? (
+        <section className="grid gap-3 rounded-xl border p-3">
+          <h3 className="text-sm font-medium">Powrót · {returnDate}</h3>
+          <AmountField
+            id={`return-amount${idPrefix}`}
+            label="Kwota powrotu"
+            value={returnAmount}
+            onChange={setReturnAmount}
+          />
           <div className="grid gap-2 sm:grid-cols-2">
             <TimeField
               id={`return-depart${idPrefix}`}
@@ -197,8 +242,15 @@ export function PriceLogForm({
               onChange={setReturnArrive}
             />
           </div>
-        ) : null}
-      </fieldset>
+        </section>
+      ) : null}
+
+      {total != null ? (
+        <p className="text-sm">
+          Razem <span className="font-medium tabular-nums">{formatPln(total)}</span>
+          <span className="text-muted-foreground"> · tyle zapisze się w historii</span>
+        </p>
+      ) : null}
 
       {error ? (
         <p role="alert" className="text-sm text-destructive">
@@ -213,6 +265,37 @@ export function PriceLogForm({
         <Button type="submit">{submitLabel}</Button>
       </DialogFooter>
     </form>
+  );
+}
+
+function AmountField({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="flex items-center gap-2">
+        <Input
+          id={id}
+          inputMode="decimal"
+          autoComplete="off"
+          placeholder="np. 149,99"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-10"
+          required
+        />
+        <span className="text-sm font-medium">PLN</span>
+      </div>
+    </div>
   );
 }
 

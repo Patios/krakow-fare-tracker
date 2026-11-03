@@ -1,6 +1,10 @@
 -- Optional. supabase/schema.sql already includes this and can be run again.
 -- Dashboard > SQL Editor > New query.
 
+alter table public.fare_prices
+  add column if not exists outbound_amount numeric(10, 2),
+  add column if not exists return_amount numeric(10, 2);
+
 alter table public.fare_routes
   add column if not exists outbound_depart time,
   add column if not exists outbound_arrive time,

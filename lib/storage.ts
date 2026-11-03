@@ -1,5 +1,5 @@
 import type { Airline, PriceLog, StoreData, WatchedRoute } from "./types";
-import { isIsoDate, parseTimeInput } from "./format";
+import { isIsoDate, parseTimeInput, roundMoney } from "./format";
 
 export const STORAGE_KEY = "krk-fare-tracker.v1";
 
@@ -132,7 +132,26 @@ function readLog(value: unknown): PriceLog | null {
     returnArrive,
   };
   if (typeof log.autoFlights === "string" && log.autoFlights.length > 0) parsed.autoFlights = log.autoFlights;
+  const split = readLegSplit(log.amount, log.outboundAmount, log.returnAmount);
+  if (split) {
+    parsed.outboundAmount = split.outboundAmount;
+    parsed.returnAmount = split.returnAmount;
+  }
   return parsed;
+}
+
+function readLegSplit(
+  amount: number,
+  outboundAmount: unknown,
+  returnAmount: unknown,
+): { outboundAmount: number; returnAmount: number } | null {
+  if (outboundAmount == null && returnAmount == null) return null;
+  if (typeof outboundAmount !== "number" || typeof returnAmount !== "number") return null;
+  const outbound = roundMoney(outboundAmount);
+  const inbound = roundMoney(returnAmount);
+  if (outbound <= 0 || inbound <= 0) return null;
+  if (roundMoney(outbound + inbound) !== roundMoney(amount)) return null;
+  return { outboundAmount: outbound, returnAmount: inbound };
 }
 
 function readOptionalTime(value: unknown): string | null | "invalid" {

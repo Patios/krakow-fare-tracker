@@ -41,6 +41,15 @@ export function formatPln(amount: number): string {
   return moneyFormatter.format(amount);
 }
 
+/** Outbound and return fares, when both were entered. The logged total stays in `amount`. */
+export function formatLegPrices(entry: {
+  outboundAmount?: number | null;
+  returnAmount?: number | null;
+}): string | null {
+  if (entry.outboundAmount == null || entry.returnAmount == null) return null;
+  return `wylot ${formatPln(entry.outboundAmount)} · powrót ${formatPln(entry.returnAmount)}`;
+}
+
 export function roundMoney(amount: number): number {
   return Math.round(amount * 100) / 100;
 }

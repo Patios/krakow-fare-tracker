@@ -32,8 +32,12 @@ export type FlightTimes = {
 
 export type PriceDraft = FlightTimes & {
   airline: Airline;
+  /** Trip total. For a round trip entered as two fares, this is their sum. */
   amount: number;
   checkedOn: string;
+  /** Set together when the fare was entered as an outbound price and a return price. */
+  outboundAmount?: number | null;
+  returnAmount?: number | null;
 };
 
 export type PriceLog = PriceDraft & {

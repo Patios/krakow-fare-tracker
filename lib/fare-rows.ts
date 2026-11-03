@@ -28,6 +28,8 @@ export type FarePriceInsert = {
   return_arrive: string | null;
   created_at: string;
   auto_flights?: string;
+  outbound_amount?: number;
+  return_amount?: number;
 };
 
 const TIME_FIELDS = ["outboundDepart", "outboundArrive", "returnDepart", "returnArrive"] as const;
@@ -66,6 +68,10 @@ export function priceToRow(log: PriceLog): FarePriceInsert {
     created_at: log.createdAt,
   };
   if (log.autoFlights) row.auto_flights = log.autoFlights;
+  if (log.outboundAmount != null && log.returnAmount != null) {
+    row.outbound_amount = log.outboundAmount;
+    row.return_amount = log.returnAmount;
+  }
   return row;
 }
 
@@ -145,6 +151,12 @@ export function priceFromRow(value: unknown): PriceLog | null {
     returnArrive,
   };
   if (typeof row.auto_flights === "string" && row.auto_flights.length > 0) log.autoFlights = row.auto_flights;
+  const outboundAmount = readAmount(row.outbound_amount);
+  const returnAmount = readAmount(row.return_amount);
+  if (outboundAmount != null && returnAmount != null && roundMoney(outboundAmount + returnAmount) === amount) {
+    log.outboundAmount = outboundAmount;
+    log.returnAmount = returnAmount;
+  }
   return log;
 }
 

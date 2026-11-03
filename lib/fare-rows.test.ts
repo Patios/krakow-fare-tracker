@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cloudChanges, mergeStores, priceFromRow, routeFromRow, routeToRow, storeFromRows } from "./fare-rows";
+import { cloudChanges, mergeStores, priceFromRow, priceToRow, routeFromRow, routeToRow, storeFromRows } from "./fare-rows";
 import type { PriceLog, WatchedRoute } from "./types";
 
 const route: WatchedRoute = {
@@ -57,6 +57,34 @@ test("database rows become routes and prices", () => {
   assert.deepEqual(stored, { routes: [route], logs: [log] });
   assert.equal(routeFromRow({ id: "x" }), null);
   assert.equal(priceFromRow({ id: log.id, amount: "0" }), null);
+});
+
+test("a round trip keeps the outbound and return fares next to the total", () => {
+  const split = {
+    ...log,
+    amount: 352.71,
+    outboundAmount: 202.41,
+    returnAmount: 150.3,
+    returnDepart: "14:30",
+    returnArrive: "18:20",
+  };
+  const row = priceToRow(split);
+  assert.equal(row.outbound_amount, 202.41);
+  assert.equal(row.return_amount, 150.3);
+  assert.deepEqual(
+    priceFromRow({
+      ...row,
+      amount: "352.71",
+      outbound_amount: "202.41",
+      return_amount: "150.30",
+      outbound_depart: "06:40:00",
+      outbound_arrive: "08:35:00",
+      return_depart: "14:30:00",
+      return_arrive: "18:20:00",
+    }),
+    split,
+  );
+  assert.equal(priceToRow(log).outbound_amount, undefined);
 });
 
 test("the first sign-in uploads local rows the account does not have", () => {

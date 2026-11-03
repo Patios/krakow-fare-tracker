@@ -37,6 +37,10 @@ create table if not exists public.fare_prices (
 alter table public.fare_prices
   add column if not exists auto_flights text;
 
+alter table public.fare_prices
+  add column if not exists outbound_amount numeric(10, 2),
+  add column if not exists return_amount numeric(10, 2);
+
 alter table public.fare_routes
   add column if not exists auto_refresh boolean not null default false;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { PriceLogForm } from "@/components/price-log-form";
+import { PriceLogForm, TripDateSummary } from "@/components/price-log-form";
 import {
   Dialog,
   DialogContent,
@@ -8,20 +8,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Airline, PriceDraft } from "@/lib/types";
+import type { Airline, PriceDraft, SearchTrip } from "@/lib/types";
 
 export function LogPriceDialog({
   open,
   city,
+  destinationIata,
   airlines,
-  hasReturn,
+  trip,
   onOpenChange,
   onSave,
 }: {
   open: boolean;
   city: string;
+  destinationIata: string;
   airlines: Airline[];
-  hasReturn: boolean;
+  trip: SearchTrip;
   onOpenChange: (open: boolean) => void;
   onSave: (entry: PriceDraft) => boolean;
 }) {
@@ -31,12 +33,16 @@ export function LogPriceDialog({
         <DialogHeader>
           <DialogTitle className="font-heading text-lg">Zapisz cenę</DialogTitle>
           <DialogDescription>
-            {city}. Wpisz kwotę i godziny, które widzisz u przewoźnika. Zapis jest w PLN.
+            {city}.{" "}
+            {trip.returnDate
+              ? "Wpisz osobno kwotę wylotu i powrotu oraz godziny z karty lotu. Zapis jest w PLN."
+              : "Wpisz kwotę i godziny, które widzisz u przewoźnika. Zapis jest w PLN."}
           </DialogDescription>
         </DialogHeader>
+        <TripDateSummary trip={trip} destinationIata={destinationIata} />
         <PriceLogForm
           airlines={airlines}
-          hasReturn={hasReturn}
+          trip={trip}
           onCancel={() => onOpenChange(false)}
           onSave={onSave}
           onSaved={() => onOpenChange(false)}

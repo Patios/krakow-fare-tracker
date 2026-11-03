@@ -7,7 +7,7 @@ import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { FlightDayCheck } from "@/components/flight-day-check";
 import { AIRLINE_LABEL } from "@/lib/airports";
 import { lookupDestination } from "@/lib/network-refresh";
-import { flightClock, formatDate, formatFlightTimes, formatPln, formatTripDates, todayIso } from "@/lib/format";
+import { flightClock, formatDate, formatFlightTimes, formatLegPrices, formatPln, formatTripDates, todayIso } from "@/lib/format";
 import { latestLogsByAirline, lowestLoggedPrice, orderedLogs, lastOutboundDay, priceDrop, tripEnded } from "@/lib/routes";
 import { openAirlineWindow } from "@/lib/airline-window";
 import { ryanairSearchUrl, wizzairSearchUrl, wizzRangeNote } from "@/lib/search-urls";
@@ -336,7 +336,10 @@ export function RouteCard({
             <p className="text-sm text-muted-foreground">Nie ma jeszcze wpisów.</p>
           ) : (
             <ul className="grid gap-2">
-              {routeLogs.map((entry) => (
+              {routeLogs.map((entry) => {
+                const legs = formatLegPrices(entry);
+                const times = formatFlightTimes(entry);
+                return (
                 <li
                   key={entry.id}
                   className="flex flex-col gap-2 rounded-lg bg-muted/70 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
@@ -347,7 +350,8 @@ export function RouteCard({
                       <AirlineMark airline={entry.airline} className="size-5" />
                       <span className="text-muted-foreground">
                         {AIRLINE_LABEL[entry.airline]} · {formatDate(entry.checkedOn)}
-                        {formatFlightTimes(entry) ? ` · ${formatFlightTimes(entry)}` : ""}
+                        {legs ? ` · ${legs}` : ""}
+                        {times ? ` · ${times}` : ""}
                       </span>
                     </span>
                     <AutoSource log={entry} />
@@ -367,7 +371,8 @@ export function RouteCard({
                     </Button>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>

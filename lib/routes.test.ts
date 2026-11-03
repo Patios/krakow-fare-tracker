@@ -288,6 +288,25 @@ test("flight times are optional and stay with the logged price", () => {
   const stored = parseStore(raw);
   assert.equal(stored.logs[0]?.outboundDepart, null);
   assert.equal(stored.logs[0]?.returnArrive, null);
+  assert.equal(stored.logs[0]?.outboundAmount, undefined);
+
+  const withLegs = parseStore(
+    JSON.stringify({
+      routes: [],
+      logs: [{ ...stored.logs[0], amount: 180, outboundAmount: 100, returnAmount: 80 }],
+    }),
+  );
+  assert.equal(withLegs.logs[0]?.amount, 180);
+  assert.equal(withLegs.logs[0]?.outboundAmount, 100);
+  assert.equal(withLegs.logs[0]?.returnAmount, 80);
+  const mismatched = parseStore(
+    JSON.stringify({
+      routes: [],
+      logs: [{ ...stored.logs[0], amount: 180, outboundAmount: 100, returnAmount: 70 }],
+    }),
+  );
+  assert.equal(mismatched.logs[0]?.amount, 180);
+  assert.equal(mismatched.logs[0]?.outboundAmount, undefined);
 
   const withTimes = parseStore(
     JSON.stringify({

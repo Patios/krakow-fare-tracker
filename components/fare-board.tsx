@@ -719,8 +719,13 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
           key={logKey}
           open
           city={`${logDestination.city} (${logDestination.iata})`}
+          destinationIata={logDestination.iata}
           airlines={logDestination.airlines}
-          hasReturn={logRoute.returnDate != null}
+          trip={{
+            outboundFrom: logRoute.outboundFrom,
+            outboundTo: logRoute.outboundTo,
+            returnDate: logRoute.returnDate,
+          }}
           onOpenChange={(open) => {
             if (!open) setLogRouteId(null);
           }}
@@ -741,6 +746,9 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                   outboundArrive: entry.outboundArrive,
                   returnDepart: entry.returnDepart,
                   returnArrive: entry.returnArrive,
+                  ...(entry.outboundAmount != null && entry.returnAmount != null
+                    ? { outboundAmount: entry.outboundAmount, returnAmount: entry.returnAmount }
+                    : {}),
                   createdAt: new Date().toISOString(),
                 },
               ],
@@ -777,6 +785,9 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                   outboundArrive: entry.outboundArrive,
                   returnDepart: entry.returnDepart,
                   returnArrive: entry.returnArrive,
+                  ...(entry.outboundAmount != null && entry.returnAmount != null
+                    ? { outboundAmount: entry.outboundAmount, returnAmount: entry.returnAmount }
+                    : {}),
                   createdAt: new Date().toISOString(),
                 },
               ],

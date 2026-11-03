@@ -256,9 +256,24 @@ async function insertRows(
     if (error) return failPersist(error.message);
   }
   if (prices.length > 0) {
-    let { error } = await db.from("fare_prices").insert(prices);
-    if (error && missingAutoColumn(error.message)) {
-      ({ error } = await db.from("fare_prices").insert(prices.map(({ auto_flights: _auto, ...row }) => row)));
+    let payload = prices.map((price) => ({ ...price }));
+    let { error } = await db.from("fare_prices").insert(payload);
+    if (error && (missingAutoColumn(error.message) || missingLegAmountColumn(error.message))) {
+      const message = error.message;
+      payload = payload.map((price) => {
+        const next = { ...price };
+        if (missingAutoColumn(message)) delete next.auto_flights;
+        if (missingLegAmountColumn(message)) {
+          delete next.outbound_amount;
+          delete next.return_amount;
+        }
+        return next;
+      });
+      ({ error } = await db.from("fare_prices").insert(payload));
+    }
+    if (error && (missingAutoColumn(error.message) || missingLegAmountColumn(error.message))) {
+      payload = payload.map(({ auto_flights: _auto, outbound_amount: _outbound, return_amount: _return, ...row }) => row);
+      ({ error } = await db.from("fare_prices").insert(payload));
     }
     if (error) return failPersist(error.message);
   }
@@ -267,6 +282,10 @@ async function insertRows(
 
 function missingAutoColumn(message: string) {
   return /auto_flights/i.test(message);
+}
+
+function missingLegAmountColumn(message: string) {
+  return /outbound_amount|return_amount/i.test(message);
 }
 
 function missingAutoRefreshColumn(message: string) {
@@ -353,7 +372,13 @@ async function pullStore(): Promise<{ ok: true; data: StoreData } | { ok: false;
   }
   const priceColumns =
     "id, route_id, airline, amount, currency, checked_on, outbound_depart, outbound_arrive, return_depart, return_arrive, created_at";
-  const pricesWithAuto = await db.from("fare_prices").select(`${priceColumns}, auto_flights`);
+  const pricesWithLegs = await db
+    .from("fare_prices")
+    .select(`${priceColumns}, auto_flights, outbound_amount, return_amount`);
+  const pricesWithAuto =
+    pricesWithLegs.error && missingLegAmountColumn(pricesWithLegs.error.message)
+      ? await db.from("fare_prices").select(`${priceColumns}, auto_flights`)
+      : pricesWithLegs;
   const prices =
     pricesWithAuto.error && missingAutoColumn(pricesWithAuto.error.message)
       ? await db.from("fare_prices").select(priceColumns)
