@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { MapPinned, Plus, RefreshCw, Search } from "lucide-react";
+import { MapPinned, Plus, RefreshCw, Search, Ticket } from "lucide-react";
 import { AccountDialog } from "@/components/account-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AirlineMark } from "@/components/airline-mark";
@@ -408,6 +408,14 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                 className="h-9 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
               >
                 <MapPinned /> <span data-label>Mapa połączeń</span>
+              </Button>
+              <Button
+                nativeButton={false}
+                render={<Link href="/rezerwacje" aria-label="Rezerwacje" />}
+                variant="outline"
+                className="h-9 border-white/35 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
+              >
+                <Ticket /> <span data-label>Rezerwacje</span>
               </Button>
               <ThemeToggle className="h-9" />
               <AccountDialog />

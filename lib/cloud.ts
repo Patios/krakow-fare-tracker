@@ -1,3 +1,4 @@
+import { forgetBookings } from "./booking-cloud";
 import { cloudChanges, mergeStores, priceToRow, routeToRow, storeFromRows } from "./fare-rows";
 import { clearStore, getSnapshot, interpretSnapshot, saveStore } from "./storage";
 import { authRedirectTo, getSupabase } from "./supabase";
@@ -62,6 +63,7 @@ export function startCloudSync(): () => void {
         patch({ auth: { status: "signed-out" }, error: null, syncing: false });
         enqueue(async () => {
           clearStore();
+          forgetBookings();
         });
         return;
       }
