@@ -446,6 +446,14 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
             >
               <Search /> Znajdź trasy
             </Button>
+            <Button
+              nativeButton={false}
+              render={<Link href="/najlepsze-okazje" />}
+              variant="outline"
+              className="col-span-2 h-11 border-white/35 bg-white/10 px-4 text-base font-semibold text-white hover:bg-white/20 hover:text-white sm:col-span-1 dark:border-white/35! dark:bg-white/10! dark:text-white! dark:hover:bg-white/20! dark:hover:text-white!"
+            >
+              Najlepsze okazje
+            </Button>
           </div>
         </div>
       </header>

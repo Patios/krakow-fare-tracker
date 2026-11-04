@@ -182,6 +182,34 @@ export function quoteWizz(
 
 export type WizzEstimateLeg = { leg: "outbound" | "return"; date: string; departs: string | null; amount: number; approximate: boolean };
 
+/** A confirmed, currently published Wizz fare for the route's saved date window. */
+export type WizzLiveFare = {
+  amount: number;
+  outboundDate: string;
+  outboundDepart: string | null;
+  returnDate: string | null;
+  returnDepart: string | null;
+};
+
+/**
+ * Returns the lowest currently priced Wizz option in the route window.
+ * Days that say "check price" are deliberately excluded: they are not a confirmed fare.
+ */
+export function liveWizzFare(route: WatchedRoute, data: WizzData | null, today: string): WizzLiveFare | null {
+  const windows = legWindows(route, data, today);
+  if ("status" in windows) return null;
+  const outbound = cheapestDay(windows.fares.out, windows.outboundWindow).day;
+  const inbound = windows.returnWindow ? cheapestDay(windows.fares.back, windows.returnWindow).day : null;
+  if (!outbound || (windows.returnWindow && !inbound)) return null;
+  return {
+    amount: roundMoney((outbound[1] as number) + (inbound?.[1] ?? 0)),
+    outboundDate: outbound[0],
+    outboundDepart: outbound[2][0] ?? null,
+    returnDate: inbound?.[0] ?? null,
+    returnDepart: inbound?.[2][0] ?? null,
+  };
+}
+
 /**
  * Wizz price for a route where some leg has only a "check price" day.
  * Such a leg counts with its earlier fare, so the total is approximate and never goes to the history.
