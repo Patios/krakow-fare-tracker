@@ -53,6 +53,12 @@ import {
 import { applyPickedFlights, type PickedLeg } from "@/lib/fare-calendar";
 import { noFareText, refreshRyanairPrice, type RefreshOutcome } from "@/lib/fare-refresh";
 import { formatDate, formatPln, todayIso } from "@/lib/format";
+import {
+  getRyanairServerSnapshot,
+  getRyanairSnapshot,
+  liveRyanairFare,
+  subscribeRyanair,
+} from "@/lib/ryanair-data";
 import { lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "@/lib/routes";
 import {
   clearStore,
@@ -84,6 +90,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
     useSyncExternalStore(subscribeAutoRefresh, getAutoRefreshSnapshot, getAutoRefreshServerSnapshot),
   );
   const wizz = useSyncExternalStore(subscribeWizz, getWizzSnapshot, getWizzServerSnapshot);
+  const ryanair = useSyncExternalStore(subscribeRyanair, getRyanairSnapshot, getRyanairServerSnapshot);
   const inFlight = useRef(new Set<string>());
   const view = interpretSnapshot(snapshot);
   const signedIn = cloud.auth.status === "signed-in";
@@ -162,9 +169,10 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const autoCount = ready?.routes.filter((route) => route.autoRefresh === true).length ?? 0;
   const ryanairUpdatedAt =
     [
+      ryanair?.checkedAt,
       ...Object.values(autoSettings.lastChecked),
       ...(ready?.logs ?? []).filter((log) => log.airline === "ryanair" && log.autoFlights).map((log) => log.createdAt),
-    ].sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null;
+    ].filter((value): value is string => typeof value === "string").sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null;
   const refreshingAll = ryanairRouteIds.length > 0 && ryanairRouteIds.every((id) => refreshing.has(id));
 
   useEffect(() => startCloudSync(), []);
@@ -596,6 +604,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                   refreshNote={refreshNotes[route.id] ?? null}
                   noFare={currentNoFare(route, autoSettings)}
                   dayFlights={currentDayFlights(route, autoSettings)}
+                  ryanairFare={liveRyanairFare(route, ryanair, todayIso())}
                   wizzPriced={wizz?.fares[route.destinationIata] != null}
                   wizzEstimate={estimateWizz(route, wizz, todayIso())}
                   onRefresh={() => void refreshPrices([route.id])}

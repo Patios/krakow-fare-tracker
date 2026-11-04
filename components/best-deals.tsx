@@ -13,7 +13,7 @@ export function BestDeals({ deals }: { deals: DealRecommendation[] }) {
         <div>
           <h2 id="best-deals-heading" className="flex items-center gap-2 font-heading text-xl font-semibold tracking-wide">
             <Sparkles className="size-5 text-emerald-700 dark:text-emerald-400" />
-            Najlepsze okazje
+            Okazje obserwowanych tras
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">Ceny dla wylotów w ciągu najbliższych 31 dni.</p>
         </div>
@@ -36,6 +36,7 @@ export function BestDeals({ deals }: { deals: DealRecommendation[] }) {
                     <span className="flex items-center gap-1 text-sm text-muted-foreground">
                       <AirlineMark airline={deal.airline} className="size-4" /> {AIRLINE_LABEL[deal.airline]}
                     </span>
+                    {deal.source === "ryanair-file" ? <Badge variant="outline">aktualna cena Ryanair</Badge> : null}
                     {deal.source === "wizz-file" ? <Badge variant="outline">aktualna cena Wizz</Badge> : null}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -48,7 +49,7 @@ export function BestDeals({ deals }: { deals: DealRecommendation[] }) {
                   </p>
                   <p className="mt-1 text-sm">
                     <span className="font-medium text-emerald-800 dark:text-emerald-300">
-                      {deal.verdict === "book" ? "Rezerwuj teraz." : deal.verdict === "good" ? "Dobra okazja." : "Aktualna cena Wizz."}
+                      {deal.verdict === "book" ? "Rezerwuj teraz." : deal.verdict === "good" ? "Dobra okazja." : "Aktualna cena z pliku."}
                     </span>{" "}
                     {dealReason(deal)}
                     {!deal.fresh ? " Cena ma ponad 48 h — sprawdź ją ponownie przed zakupem." : ""}

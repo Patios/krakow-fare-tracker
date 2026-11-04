@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { estimateWizz, parseWizzData, parseWizzTimetable, quoteWizz, type WizzData } from "./wizz-data";
+import { estimateWizz, parseWizzData, parseWizzTimetable, quoteWizz, wizzCalendarDeals, type WizzData } from "./wizz-data";
 import type { PriceLog, WatchedRoute } from "./types";
 
 const TODAY = "2026-10-29";
@@ -71,6 +71,24 @@ test("the timetable keeps priced days and gives check-price days only their earl
 test("the published file is checked before use", () => {
   assert.deepEqual(parseWizzData(JSON.parse(JSON.stringify(data()))), data());
   assert.equal(parseWizzData({ checkedAt: 1 }), null);
+});
+
+test("the global Wizz ranking keeps only confirmed fares in the next 31 days", () => {
+  const ranked = wizzCalendarDeals(
+    {
+      ...data(),
+      destinations: [
+        { iata: "MXP", city: "Mediolan", country: "Włochy", startsOn: null },
+        { iata: "VNO", city: "Wilno", country: "Litwa", startsOn: null },
+      ],
+      fares: {
+        ...data().fares,
+        VNO: { out: [["2026-11-15", 99, ["07:00"]], ["2026-12-10", 49, ["07:00"]]], back: [] },
+      },
+    },
+    TODAY,
+  );
+  assert.deepEqual(ranked.map((deal) => [deal.destination.iata, deal.amount, deal.date]), [["VNO", 99, "2026-11-15"], ["MXP", 169, "2026-11-07"]]);
 });
 
 test("a return trip adds the cheapest outbound day and the return day", () => {

@@ -24,9 +24,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Prices are refreshed by .github/workflows/wizz.yml. A code deploy keeps the file already on the site.
-      - name: Keep published Wizz fares
+      # Prices are refreshed by .github/workflows/wizz.yml. A code deploy keeps the files already on the site.
+      - name: Keep published fare snapshots
         run: curl -fsSL --retry 2 "https://patios.github.io/krakow-fare-tracker/wizz.json" -o public/wizz.json || true
+      - run: curl -fsSL --retry 2 "https://patios.github.io/krakow-fare-tracker/ryanair.json" -o public/ryanair.json || true
       - run: npm run build
         env:
           NEXT_PUBLIC_BASE_PATH: /krakow-fare-tracker

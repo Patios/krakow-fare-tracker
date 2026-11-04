@@ -1,6 +1,8 @@
 import { roundMoney } from "./format";
+import { lookupDestination } from "./network-refresh";
 import { lastOutboundDay, orderedLogs } from "./routes";
 import type { Airline, PriceLog, WatchedRoute } from "./types";
+import { liveRyanairFare, type RyanairData } from "./ryanair-data";
 import { liveWizzFare, type WizzData } from "./wizz-data";
 
 export type DealRecommendation = {
@@ -15,14 +17,15 @@ export type DealRecommendation = {
   percentDrop: number | null;
   verdict: "book" | "good" | "current";
   fresh: boolean;
-  source: "history" | "wizz-file";
-  /** The published day behind a Wizz file price. History deals keep the route window instead. */
+  source: "history" | "ryanair-file" | "wizz-file";
+  /** The published day behind a snapshot price. History deals keep the route window instead. */
   pricedOutbound: string | null;
   pricedReturn: string | null;
 };
 
 export type BestDealOptions = {
   limit?: number;
+  ryanair?: RyanairData | null;
   wizz?: WizzData | null;
 };
 
@@ -34,19 +37,25 @@ export function bestDeals(
   routes: WatchedRoute[],
   logs: PriceLog[],
   today: string,
-  { limit = 5, wizz = null }: BestDealOptions = {},
+  { limit = 5, ryanair = null, wizz = null }: BestDealOptions = {},
 ): DealRecommendation[] {
   const through = addDays(today, 30);
   const deals = routes.flatMap((route) => {
     if (route.outboundFrom > through || lastOutboundDay(route) < today) return [];
     const routeLogs = orderedLogs(logs, route.id);
-    const ryanair = recommendationFor(route, routeLogs.filter((log) => log.airline === "ryanair"), today);
+    const ryanairHistory = routeLogs.filter((log) => log.airline === "ryanair");
+    const currentRyanair = lookupDestination(route.destinationIata)?.airlines.includes("ryanair")
+      ? liveRyanairFare(route, ryanair, today)
+      : null;
+    const ryanairDeal = currentRyanair
+      ? recommendationFromSnapshot(route, ryanairHistory, currentRyanair, currentRyanair.checkedAt ?? today, today, "ryanair", "FR", "ryanair-file")
+      : recommendationFor(route, ryanairHistory, today);
     const wizzHistory = routeLogs.filter((log) => log.airline === "wizzair");
     const currentWizz = liveWizzFare(route, wizz, today);
     const wizzDeal = currentWizz
-      ? recommendationFromWizzFile(route, wizzHistory, currentWizz, wizz?.checkedAt ?? today, today)
+      ? recommendationFromSnapshot(route, wizzHistory, currentWizz, wizz?.checkedAt ?? today, today, "wizzair", "W6", "wizz-file")
       : recommendationFor(route, wizzHistory, today);
-    return [ryanair, wizzDeal].filter((deal): deal is DealRecommendation => deal != null);
+    return [ryanairDeal, wizzDeal].filter((deal): deal is DealRecommendation => deal != null);
   });
 
   return deals
@@ -105,17 +114,26 @@ function recommendationFor(
   };
 }
 
-function recommendationFromWizzFile(
+function recommendationFromSnapshot(
   route: WatchedRoute,
   history: PriceLog[],
-  fare: NonNullable<ReturnType<typeof liveWizzFare>>,
+  fare: {
+    amount: number;
+    outboundDate: string;
+    outboundDepart: string | null;
+    returnDate: string | null;
+    returnDepart: string | null;
+  },
   checkedAt: string,
   today: string,
+  airline: Airline,
+  flightPrefix: string,
+  source: Extract<DealRecommendation["source"], "ryanair-file" | "wizz-file">,
 ): DealRecommendation | null {
   const latest: PriceLog = {
-    id: `wizz-file-${route.id}`,
+    id: `${source}-${route.id}`,
     routeId: route.id,
-    airline: "wizzair",
+    airline,
     amount: fare.amount,
     currency: "PLN",
     checkedOn: checkedAt.slice(0, 10),
@@ -124,10 +142,10 @@ function recommendationFromWizzFile(
     returnDepart: fare.returnDepart,
     returnArrive: null,
     createdAt: checkedAt,
-    autoFlights: `W6 ${fare.outboundDate}${fare.returnDate ? `; W6 ${fare.returnDate}` : ""}`,
+    autoFlights: `${flightPrefix} ${fare.outboundDate}${fare.returnDate ? `; ${flightPrefix} ${fare.returnDate}` : ""}`,
   };
   const series = [latest, ...history.filter((log) => log.checkedOn !== latest.checkedOn || log.amount !== latest.amount)];
-  const assessed = recommendationFor(route, series, today, "wizz-file");
+  const assessed = recommendationFor(route, series, today, source);
   if (assessed) {
     return { ...assessed, pricedOutbound: fare.outboundDate, pricedReturn: fare.returnDate };
   }
@@ -137,7 +155,7 @@ function recommendationFromWizzFile(
   const prices = [latest.amount, ...history.map((log) => log.amount)];
   return {
     route,
-    airline: "wizzair",
+    airline,
     latest,
     previous: history[0] ?? null,
     historicalLow: Math.min(...prices),
@@ -147,7 +165,7 @@ function recommendationFromWizzFile(
     percentDrop: null,
     verdict: "current",
     fresh: daysBetween(latest.checkedOn, today) <= 2,
-    source: "wizz-file",
+    source,
     pricedOutbound: fare.outboundDate,
     pricedReturn: fare.returnDate,
   };

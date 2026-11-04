@@ -12,6 +12,7 @@ import { latestLogsByAirline, lowestLoggedPrice, orderedLogs, lastOutboundDay, p
 import { openAirlineWindow } from "@/lib/airline-window";
 import { ryanairSearchUrl, wizzairSearchUrl, wizzRangeNote } from "@/lib/search-urls";
 import type { Airline, PriceLog, WatchedRoute } from "@/lib/types";
+import type { RyanairLiveFare } from "@/lib/ryanair-data";
 import type { WizzEstimateLeg } from "@/lib/wizz-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export function RouteCard({
   refreshNote,
   noFare,
   dayFlights,
+  ryanairFare,
   wizzPriced,
   wizzEstimate,
   onRefresh,
@@ -49,6 +51,7 @@ export function RouteCard({
   refreshNote: string | null;
   noFare: NoFare | null;
   dayFlights: DayFlights[];
+  ryanairFare: RyanairLiveFare | null;
   wizzPriced: boolean;
   wizzEstimate: { amount: number; legs: WizzEstimateLeg[] } | null;
   onRefresh: () => void;
@@ -67,9 +70,15 @@ export function RouteCard({
   const routeLogs = orderedLogs(logs, route.id);
   const lowest = lowestLoggedPrice(routeLogs);
   const latest = routeLogs[0];
+  const servedByRyanair = destination?.airlines.includes("ryanair") ?? false;
+  const publishedRyanair = servedByRyanair && ryanairFare ? ryanairSnapshotLog(route, ryanairFare) : null;
   const drop = priceDrop(routeLogs);
-  const airlineOffers =
-    destination && destination.airlines.length > 1 ? latestLogsByAirline(routeLogs, destination.airlines) : null;
+  const visibleDrop = drop && (!publishedRyanair || drop.latest.airline === "wizzair") ? drop : null;
+  const airlineOffers = destination && destination.airlines.length > 1
+    ? latestLogsByAirline(routeLogs, destination.airlines).map((offer) =>
+        offer.airline === "ryanair" && publishedRyanair ? { ...offer, log: publishedRyanair } : offer,
+      )
+    : null;
   const outboundClock =
     flightClock(route.outboundDepart ?? null, route.outboundArrive ?? null) ??
     firstClock(routeLogs, "outboundDepart", "outboundArrive");
@@ -80,7 +89,6 @@ export function RouteCard({
   const sharedClocks = !airlineOffers || !airlineOffers.some((offer) => offer.log && formatFlightTimes(offer.log));
   const ended = tripEnded(route, todayIso());
   const past = !ended && route.outboundFrom < todayIso();
-  const servedByRyanair = destination?.airlines.includes("ryanair") ?? false;
   const refreshable = !ended && (servedByRyanair || wizzPriced);
   const hasRyanairLog = routeLogs.some((log) => log.airline === "ryanair");
   const rangeNote = destination?.airlines.includes("wizzair") ? wizzRangeNote(route) : null;
@@ -116,18 +124,18 @@ export function RouteCard({
     });
   }
   if (refreshNote) notices.push({ key: "refresh", tone: "info", text: refreshNote });
-  if (drop) {
+  if (visibleDrop) {
     notices.push({
       key: "drop",
       tone: "good",
-      text: `Ostatni wpis jest niższy niż poprzedni (${formatPln(drop.previous.amount)}, ${AIRLINE_LABEL[drop.previous.airline]}, ${formatDate(drop.previous.checkedOn)}).`,
+      text: `Ostatni wpis jest niższy niż poprzedni (${formatPln(visibleDrop.previous.amount)}, ${AIRLINE_LABEL[visibleDrop.previous.airline]}, ${formatDate(visibleDrop.previous.checkedOn)}).`,
     });
   }
   if (past) notices.push({ key: "past", tone: "info", text: "Początek terminu już minął. Ceny są szukane od dziś." });
   if (rangeNote && !ended) notices.push({ key: "range", tone: "info", text: rangeNote });
 
   return (
-    <Card id={id} className={cn("scroll-mt-4 gap-0 pt-0 pb-0", drop && !ended && "ring-emerald-700/30")}>
+    <Card id={id} className={cn("scroll-mt-4 gap-0 pt-0 pb-0", visibleDrop && !ended && "ring-emerald-700/30")}>
       <div aria-hidden className={cn("h-1.5 w-full", ended ? "bg-border" : airlineStripe(destination?.airlines))} />
       <CardHeader className={cn("pt-4 pb-3", ended && "opacity-60")}>
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
@@ -150,12 +158,12 @@ export function RouteCard({
               {destination?.airlines.map((airline) => <AirlineChip key={airline} airline={airline} />)}
             </div>
           </div>
-          {airlineOffers ? null : !latest && wizzEstimate ? (
+          {airlineOffers ? null : !publishedRyanair && !latest && wizzEstimate ? (
             <div className="text-right">
               <WizzEstimate estimate={wizzEstimate} named />
             </div>
           ) : (
-            <PriceSummary lowest={lowest} latest={latest} drop={drop?.delta ?? null} />
+            <PriceSummary lowest={lowest} latest={latest} published={publishedRyanair} drop={visibleDrop?.delta ?? null} />
           )}
         </div>
       </CardHeader>
@@ -221,7 +229,8 @@ export function RouteCard({
           />
         </div>
 
-        {!airlineOffers && latest && !(latest.airline === "ryanair" && listsFlights) ? <AutoSource log={latest} /> : null}
+        {!airlineOffers && publishedRyanair && !listsFlights ? <AutoSource log={publishedRyanair} /> : null}
+        {!airlineOffers && !publishedRyanair && latest && !(latest.airline === "ryanair" && listsFlights) ? <AutoSource log={latest} /> : null}
 
         {notices.length > 0 ? (
           <div className="grid gap-2" role="status">
@@ -381,7 +390,47 @@ export function RouteCard({
   );
 }
 
-function PriceSummary({ lowest, latest, drop }: { lowest: number | null; latest: PriceLog | undefined; drop: number | null }) {
+function ryanairSnapshotLog(route: WatchedRoute, fare: RyanairLiveFare): PriceLog {
+  const checkedAt = fare.checkedAt ?? new Date(0).toISOString();
+  return {
+    id: `ryanair-file-${route.id}`,
+    routeId: route.id,
+    airline: "ryanair",
+    amount: fare.amount,
+    currency: "PLN",
+    checkedOn: checkedAt.slice(0, 10),
+    outboundDepart: fare.outboundDepart,
+    outboundArrive: fare.outboundArrive,
+    returnDepart: fare.returnDepart,
+    returnArrive: fare.returnArrive,
+    createdAt: checkedAt,
+    autoFlights: `FR ${fare.outboundDate}${fare.returnDate ? `; FR ${fare.returnDate}` : ""}`,
+  };
+}
+
+function PriceSummary({
+  lowest,
+  latest,
+  published,
+  drop,
+}: {
+  lowest: number | null;
+  latest: PriceLog | undefined;
+  published: PriceLog | null;
+  drop: number | null;
+}) {
+  if (published) {
+    return (
+      <div className="grid justify-items-start gap-0.5 sm:justify-items-end sm:text-right">
+        <p className="text-xs tracking-wide text-muted-foreground uppercase">Aktualna cena Ryanair</p>
+        <p className="font-heading text-4xl leading-none font-bold tracking-wide text-brand-ink tabular-nums dark:text-ryanair-yellow">
+          {formatPln(published.amount)}
+        </p>
+        <p className="text-sm text-muted-foreground">Z pliku · {formatDate(published.checkedOn)}</p>
+        {lowest != null ? <p className="text-xs text-muted-foreground">Najniższa zapisana: {formatPln(lowest)}</p> : null}
+      </div>
+    );
+  }
   if (lowest == null || !latest) {
     return (
       <div className="text-left sm:text-right">

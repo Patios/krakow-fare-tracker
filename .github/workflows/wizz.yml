@@ -1,7 +1,6 @@
 name: Wizz Air prices
 
-# Fetches the Wizz timetable and publishes the site again, so the new
-# public/wizz.json is part of the static export. A code deploy does not do this.
+# Fetches the Wizz timetable and redeploys it with the latest Ryanair snapshot.
 
 on:
   schedule:
@@ -28,6 +27,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Keep published Ryanair fares
+        run: curl -fsSL --retry 2 "https://patios.github.io/krakow-fare-tracker/ryanair.json" -o public/ryanair.json || true
       - name: Wizz Air timetable
         run: npm run wizz
         timeout-minutes: 20

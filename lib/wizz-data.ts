@@ -24,6 +24,36 @@ export type WizzData = {
   fares: Record<string, { out: WizzDay[]; back: WizzDay[] }>;
 };
 
+/** One cheapest one-way Wizz fare for a destination in the next 31 days. */
+export type WizzCalendarDeal = {
+  destination: WizzDestination;
+  date: string;
+  amount: number;
+  departs: string | null;
+  checkedAt: string;
+};
+
+/**
+ * Cheapest upcoming one-way Wizz fare per destination, ranked without a
+ * watched route. Days marked "check price" are deliberately excluded.
+ */
+export function wizzCalendarDeals(data: WizzData | null, today: string, limit = Number.POSITIVE_INFINITY): WizzCalendarDeal[] {
+  if (!data) return [];
+  const through = minDate(data.through, addDays(today, 30));
+  const byIata = new Map(data.destinations.map((destination) => [destination.iata, destination]));
+  const deals: WizzCalendarDeal[] = [];
+  for (const [iata, fares] of Object.entries(data.fares)) {
+    const destination = byIata.get(iata);
+    if (!destination) continue;
+    const cheapest = fares.out
+      .filter((day) => day[0] >= today && day[0] <= through && day[1] != null)
+      .reduce<WizzDay | null>((best, day) => (!best || (day[1] as number) < (best[1] as number) ? day : best), null);
+    if (!cheapest) continue;
+    deals.push({ destination, date: cheapest[0], amount: cheapest[1] as number, departs: cheapest[2][0] ?? null, checkedAt: data.checkedAt });
+  }
+  return deals.sort((a, b) => a.amount - b.amount || a.date.localeCompare(b.date) || a.destination.city.localeCompare(b.destination.city, "pl")).slice(0, limit);
+}
+
 /** Days from one timetable answer. Null when the payload is not a timetable. */
 export function parseWizzTimetable(payload: unknown): { out: WizzDay[]; back: WizzDay[] } | null {
   if (!payload || typeof payload !== "object") return null;
@@ -289,6 +319,12 @@ function cheapestDay(
 
 function minDate(a: string, b: string): string {
   return a < b ? a : b;
+}
+
+function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
 }
 
 let cached: WizzData | null = null;

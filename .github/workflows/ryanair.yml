@@ -1,0 +1,52 @@
+name: Ryanair prices
+
+# A separate deployment means a Ryanair API failure cannot delay a successful
+# Wizz refresh. The existing Wizz snapshot is copied into this static build.
+
+on:
+  schedule:
+    - cron: "47 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Keep published Wizz fares
+        run: curl -fsSL --retry 2 "https://patios.github.io/krakow-fare-tracker/wizz.json" -o public/wizz.json || true
+      - name: Ryanair calendars
+        run: npm run ryanair
+        timeout-minutes: 10
+        env:
+          RYANAIR_PREVIOUS_URL: https://patios.github.io/krakow-fare-tracker/ryanair.json
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_BASE_PATH: /krakow-fare-tracker
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

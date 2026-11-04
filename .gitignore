@@ -46,5 +46,6 @@ next-env.d.ts
 # local Cursor agents, including the flight deals analyst
 .cursor/agents/
 
-# Wizz Air timetable, written by npm run wizz and in the Pages workflow
+# Airline fare snapshots, written by npm run wizz / npm run ryanair and the Pages workflow
 /public/wizz.json
+/public/ryanair.json

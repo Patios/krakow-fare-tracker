@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { bestDeals } from "./deals";
 import type { PriceLog, WatchedRoute } from "./types";
+import type { RyanairData } from "./ryanair-data";
 import type { WizzData } from "./wizz-data";
 
 function route(partial: Partial<WatchedRoute> & Pick<WatchedRoute, "id" | "destinationIata">): WatchedRoute {
@@ -91,6 +92,60 @@ test("includes a confirmed current Wizz fare without saving it to price history"
   assert.equal(deal?.latest.amount, 95);
   assert.equal(deal?.latest.outboundDepart, "06:15");
   assert.equal(deal?.pricedOutbound, "2026-11-10");
+});
+
+test("includes a confirmed current Ryanair fare without saving it to price history", () => {
+  const routes = [route({ id: "blq", destinationIata: "BLQ" })];
+  const ryanair: RyanairData = {
+    checkedAt: "2026-11-04T08:30:00.000Z",
+    through: "2026-12-04",
+    destinations: [],
+    fares: {
+      BLQ: {
+        out: [["2026-11-10", 99, "06:15", "08:00"]],
+        back: [],
+        outCheckedAt: "2026-11-04T08:30:00.000Z",
+        backCheckedAt: "2026-11-04T08:30:00.000Z",
+      },
+    },
+  };
+
+  const [deal] = bestDeals(routes, [], "2026-11-04", { ryanair });
+  assert.equal(deal?.source, "ryanair-file");
+  assert.equal(deal?.verdict, "current");
+  assert.equal(deal?.latest.amount, 99);
+  assert.equal(deal?.latest.outboundDepart, "06:15");
+  assert.equal(deal?.pricedOutbound, "2026-11-10");
+});
+
+test("Ryanair snapshot freshness uses the older leg read and skips Wizz-only routes", () => {
+  const ryanair: RyanairData = {
+    checkedAt: "2026-11-04T08:30:00.000Z",
+    through: "2026-12-04",
+    destinations: [],
+    fares: {
+      BLQ: {
+        out: [["2026-11-10", 99, "06:15", "08:00"]],
+        back: [["2026-11-12", 109, "09:00", "10:45"]],
+        outCheckedAt: "2026-10-30T08:30:00.000Z",
+        backCheckedAt: "2026-11-04T08:30:00.000Z",
+      },
+      VNO: {
+        out: [["2026-11-10", 79, "06:15", "08:00"]],
+        back: [],
+        outCheckedAt: "2026-11-04T08:30:00.000Z",
+        backCheckedAt: "2026-11-04T08:30:00.000Z",
+      },
+    },
+  };
+  const deals = bestDeals(
+    [route({ id: "blq", destinationIata: "BLQ", returnDate: "2026-11-12" }), route({ id: "vno", destinationIata: "VNO" })],
+    [],
+    "2026-11-04",
+    { ryanair },
+  );
+  assert.equal(deals.find((deal) => deal.route.id === "blq")?.fresh, false);
+  assert.equal(deals.some((deal) => deal.route.id === "vno" && deal.source === "ryanair-file"), false);
 });
 
 test("a small drop and a Wizz fare above its history are not deals", () => {
