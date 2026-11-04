@@ -3,9 +3,6 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: [main]
-  schedule:
-    # Wizz Air timetable fares, every 4 hours.
-    - cron: "17 */4 * * *"
   workflow_dispatch:
 
 permissions:
@@ -27,12 +24,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Wizz Air timetable
-        run: npm run wizz
-        timeout-minutes: 20
-        continue-on-error: true
-        env:
-          WIZZ_PREVIOUS_URL: https://patios.github.io/krakow-fare-tracker/wizz.json
+      # Prices are refreshed by .github/workflows/wizz.yml. A code deploy keeps the file already on the site.
+      - name: Keep published Wizz fares
+        run: curl -fsSL --retry 2 "https://patios.github.io/krakow-fare-tracker/wizz.json" -o public/wizz.json || true
       - run: npm run build
         env:
           NEXT_PUBLIC_BASE_PATH: /krakow-fare-tracker

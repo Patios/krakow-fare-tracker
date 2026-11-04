@@ -1,6 +1,6 @@
 /**
  * Reads Wizz Air destinations and timetable fares from KRK and writes public/wizz.json.
- * Runs in GitHub Actions before the Pages build. A failed run keeps the last published file.
+ * Runs from .github/workflows/wizz.yml. A failed run keeps the last published file.
  *
  *   npx tsx scripts/fetch-wizz.ts
  *   WIZZ_PREVIOUS_URL=https://patios.github.io/krakow-fare-tracker/wizz.json npx tsx scripts/fetch-wizz.ts

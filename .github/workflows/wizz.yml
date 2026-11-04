@@ -1,0 +1,51 @@
+name: Wizz Air prices
+
+# Fetches the Wizz timetable and publishes the site again, so the new
+# public/wizz.json is part of the static export. A code deploy does not do this.
+
+on:
+  schedule:
+    # Every 4 hours. GitHub may start it later than the minute given here.
+    - cron: "17 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Wizz Air timetable
+        run: npm run wizz
+        timeout-minutes: 20
+        env:
+          WIZZ_PREVIOUS_URL: https://patios.github.io/krakow-fare-tracker/wizz.json
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_BASE_PATH: /krakow-fare-tracker
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
