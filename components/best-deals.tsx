@@ -1,12 +1,17 @@
-import { Sparkles } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { ChevronDown, Sparkles } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { AIRLINE_LABEL } from "@/lib/airports";
 import type { DealRecommendation } from "@/lib/deals";
 import { formatDate, formatPln, formatTripDates } from "@/lib/format";
 import { lookupDestination } from "@/lib/network-refresh";
 
 export function BestDeals({ deals, filtered = false }: { deals: DealRecommendation[]; filtered?: boolean }) {
+  const [expanded, setExpanded] = useState(true);
   return (
     <section aria-labelledby="best-deals-heading" className="overflow-hidden rounded-xl border border-emerald-700/20 bg-emerald-500/5">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-emerald-700/15 px-4 py-4 sm:px-5">
@@ -17,16 +22,21 @@ export function BestDeals({ deals, filtered = false }: { deals: DealRecommendati
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">Ceny dla wylotów w ciągu najbliższych 31 dni.</p>
         </div>
-        {deals.length > 0 ? <Badge className="bg-emerald-800 text-white">{deals.length} {dealWord(deals.length)}</Badge> : null}
+        <div className="flex items-center gap-2">
+          {deals.length > 0 ? <Badge className="bg-emerald-800 text-white">{deals.length} {dealWord(deals.length)}</Badge> : null}
+          <Button type="button" variant="outline" size="sm" aria-expanded={expanded} aria-controls="watched-deals-list" onClick={() => setExpanded((value) => !value)}>
+            <ChevronDown className={expanded ? "rotate-180" : undefined} /> {expanded ? "Zwiń" : "Rozwiń"}
+          </Button>
+        </div>
       </div>
-      {deals.length === 0 ? (
+      {expanded && deals.length === 0 ? (
         <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">
           {filtered
             ? "Żadna obserwowana trasa nie ma rekomendacji dla wybranej linii."
             : "Brak wyraźnych okazji w zapisanej historii. Dodaj co najmniej dwa odczyty ceny dla tej samej trasy i linii."}
         </p>
-      ) : (
-        <ol className="divide-y divide-emerald-700/15">
+      ) : expanded ? (
+        <ol id="watched-deals-list" className="divide-y divide-emerald-700/15">
           {deals.map((deal) => {
             const destination = lookupDestination(deal.route.destinationIata);
             return (
@@ -67,7 +77,7 @@ export function BestDeals({ deals, filtered = false }: { deals: DealRecommendati
             );
           })}
         </ol>
-      )}
+      ) : null}
     </section>
   );
 }

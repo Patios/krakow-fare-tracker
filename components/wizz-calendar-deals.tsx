@@ -1,5 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { PlaneTakeoff, Sparkles } from "lucide-react";
+import { ChevronDown, PlaneTakeoff, Sparkles } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,6 +10,7 @@ import { formatDate, formatPln } from "@/lib/format";
 import type { WizzCalendarDeal, WizzData } from "@/lib/wizz-data";
 
 export function WizzCalendarDeals({ deals, data, state }: { deals: WizzCalendarDeal[]; data: WizzData | null; state: "loading" | "ready" | "error" }) {
+  const [expanded, setExpanded] = useState(true);
   return (
     <section aria-labelledby="wizz-calendar-deals-heading" className="overflow-hidden rounded-xl border border-wizz/30 bg-wizz/5">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-wizz/20 px-4 py-4 sm:px-5">
@@ -16,16 +20,21 @@ export function WizzCalendarDeals({ deals, data, state }: { deals: WizzCalendarD
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">Najniższy bilet w jedną stronę dla każdego kierunku z Krakowa w najbliższych 31 dniach.</p>
         </div>
-        {data ? <Badge variant="outline">{deals.length} kierunków</Badge> : null}
+        <div className="flex items-center gap-2">
+          {data ? <Badge variant="outline">{deals.length} kierunków</Badge> : null}
+          <Button type="button" variant="outline" size="sm" aria-expanded={expanded} aria-controls="wizz-calendar-deals-list" onClick={() => setExpanded((value) => !value)}>
+            <ChevronDown className={expanded ? "rotate-180" : undefined} /> {expanded ? "Zwiń" : "Rozwiń"}
+          </Button>
+        </div>
       </div>
-      {state === "error" ? (
+      {expanded && state === "error" ? (
         <p role="alert" className="px-4 py-5 text-sm text-destructive sm:px-5">Nie udało się wczytać opublikowanego kalendarza Wizz Air.</p>
-      ) : !data ? (
+      ) : expanded && !data ? (
         <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">Wczytuję aktualny kalendarz Wizz Air…</p>
-      ) : deals.length === 0 ? (
+      ) : expanded && deals.length === 0 ? (
         <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">Brak potwierdzonych cen Wizz Air w najbliższych 31 dniach.</p>
-      ) : (
-        <ol className="divide-y divide-wizz/20">
+      ) : expanded ? (
+        <ol id="wizz-calendar-deals-list" className="divide-y divide-wizz/20">
           {deals.map((deal) => (
             <li key={deal.destination.iata} className="grid gap-3 px-4 py-4 sm:grid-cols-[1fr_auto] sm:items-center sm:px-5">
               <div className="min-w-0">
@@ -46,7 +55,7 @@ export function WizzCalendarDeals({ deals, data, state }: { deals: WizzCalendarD
             </li>
           ))}
         </ol>
-      )}
+      ) : null}
     </section>
   );
 }
