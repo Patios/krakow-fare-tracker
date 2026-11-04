@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatDate, formatPln } from "@/lib/format";
 import type { WizzCalendarDeal, WizzData } from "@/lib/wizz-data";
 
-export function WizzCalendarDeals({ deals, data }: { deals: WizzCalendarDeal[]; data: WizzData | null }) {
+export function WizzCalendarDeals({ deals, data, state }: { deals: WizzCalendarDeal[]; data: WizzData | null; state: "loading" | "ready" | "error" }) {
   return (
     <section aria-labelledby="wizz-calendar-deals-heading" className="overflow-hidden rounded-xl border border-wizz/30 bg-wizz/5">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-wizz/20 px-4 py-4 sm:px-5">
@@ -18,7 +18,9 @@ export function WizzCalendarDeals({ deals, data }: { deals: WizzCalendarDeal[]; 
         </div>
         {data ? <Badge variant="outline">{deals.length} kierunków</Badge> : null}
       </div>
-      {!data ? (
+      {state === "error" ? (
+        <p role="alert" className="px-4 py-5 text-sm text-destructive sm:px-5">Nie udało się wczytać opublikowanego kalendarza Wizz Air.</p>
+      ) : !data ? (
         <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">Wczytuję aktualny kalendarz Wizz Air…</p>
       ) : deals.length === 0 ? (
         <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">Brak potwierdzonych cen Wizz Air w najbliższych 31 dniach.</p>

@@ -14,9 +14,9 @@ import { AIRLINE_HOME_URL, AIRLINE_LABEL } from "@/lib/airports";
 import { getCloudServerSnapshot, getCloudSnapshot, startCloudSync, subscribeCloud } from "@/lib/cloud";
 import { bestDeals } from "@/lib/deals";
 import { todayIso } from "@/lib/format";
-import { getRyanairLoadState, getRyanairServerSnapshot, getRyanairSnapshot, ryanairCalendarDeals, subscribeRyanair } from "@/lib/ryanair-data";
+import { getRyanairResourceSnapshot, getRyanairServerResourceSnapshot, ryanairCalendarDeals, subscribeRyanair } from "@/lib/ryanair-data";
 import { getServerSnapshot, getSnapshot, interpretSnapshot, subscribe } from "@/lib/storage";
-import { getWizzServerSnapshot, getWizzSnapshot, subscribeWizz, wizzCalendarDeals } from "@/lib/wizz-data";
+import { getWizzResourceSnapshot, getWizzServerResourceSnapshot, subscribeWizz, wizzCalendarDeals } from "@/lib/wizz-data";
 import type { Airline } from "@/lib/types";
 
 const headerButton =
@@ -25,14 +25,15 @@ const headerButton =
 export function BestDealsBoard() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const cloud = useSyncExternalStore(subscribeCloud, getCloudSnapshot, getCloudServerSnapshot);
-  const wizz = useSyncExternalStore(subscribeWizz, getWizzSnapshot, getWizzServerSnapshot);
-  const ryanair = useSyncExternalStore(subscribeRyanair, getRyanairSnapshot, getRyanairServerSnapshot);
+  const wizzResource = useSyncExternalStore(subscribeWizz, getWizzResourceSnapshot, getWizzServerResourceSnapshot);
+  const ryanairResource = useSyncExternalStore(subscribeRyanair, getRyanairResourceSnapshot, getRyanairServerResourceSnapshot);
+  const wizz = wizzResource.data;
+  const ryanair = ryanairResource.data;
   const view = interpretSnapshot(snapshot);
   const ready = view.status === "ready" ? view.data : null;
   const [airlines, setAirlines] = useState<Airline[]>(["ryanair", "wizzair"]);
   const deals = ready ? bestDeals(ready.routes, ready.logs, todayIso(), { ryanair, wizz }) : [];
   const calendarDeals = ryanairCalendarDeals(ryanair, todayIso());
-  const ryanairLoadState = getRyanairLoadState();
   const wizzDeals = wizzCalendarDeals(wizz, todayIso());
   const filteredDeals = deals.filter((deal) => airlines.includes(deal.airline));
 
@@ -134,9 +135,9 @@ export function BestDealsBoard() {
             );
           })}
         </section>
-        {airlines.includes("ryanair") ? <RyanairCalendarDeals deals={calendarDeals} data={ryanair} state={ryanairLoadState} /> : null}
-        {airlines.includes("wizzair") ? <WizzCalendarDeals deals={wizzDeals} data={wizz} /> : null}
-        {ready && ready.routes.length > 0 ? <BestDeals deals={filteredDeals} /> : null}
+        {airlines.includes("ryanair") ? <RyanairCalendarDeals deals={calendarDeals} data={ryanair} state={ryanairResource.state} /> : null}
+        {airlines.includes("wizzair") ? <WizzCalendarDeals deals={wizzDeals} data={wizz} state={wizzResource.state} /> : null}
+        {ready && ready.routes.length > 0 ? <BestDeals deals={filteredDeals} filtered={airlines.length < 2} /> : null}
       </main>
     </div>
   );

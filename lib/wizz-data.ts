@@ -329,19 +329,44 @@ function addDays(date: string, days: number): string {
 
 let cached: WizzData | null = null;
 let loading: Promise<void> | null = null;
+let loadState: "idle" | "loading" | "ready" | "error" = "idle";
 const listeners = new Set<() => void>();
+export type WizzResource = { data: WizzData | null; state: "loading" | "ready" | "error" };
+let resource: WizzResource = { data: null, state: "loading" };
+const serverResource: WizzResource = { data: null, state: "loading" };
+
+function syncResource() {
+  resource = { data: cached, state: loadState === "error" ? "error" : cached ? "ready" : "loading" };
+}
+
+function notifyListeners() {
+  for (const notify of listeners) notify();
+}
 
 export function subscribeWizz(listener: () => void) {
   listeners.add(listener);
-  if (!cached && !loading && typeof window !== "undefined") {
+  if (loadState === "idle" && !loading && typeof window !== "undefined") {
     const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+    loadState = "loading";
+    syncResource();
     loading = fetch(`${base}/${WIZZ_FILE}`, { cache: "no-cache" })
-      .then((response) => (response.ok ? response.json() : null))
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
       .then((payload) => {
         cached = parseWizzData(payload);
-        for (const notify of listeners) notify();
+        loadState = cached ? "ready" : "error";
       })
-      .catch(() => undefined);
+      .catch(() => {
+        cached = null;
+        loadState = "error";
+      })
+      .finally(() => {
+        loading = null;
+        syncResource();
+        notifyListeners();
+      });
   }
   return () => {
     listeners.delete(listener);
@@ -354,6 +379,14 @@ export function getWizzSnapshot(): WizzData | null {
 
 export function getWizzServerSnapshot(): WizzData | null {
   return null;
+}
+
+export function getWizzResourceSnapshot(): WizzResource {
+  return resource;
+}
+
+export function getWizzServerResourceSnapshot(): WizzResource {
+  return serverResource;
 }
 
 export function readWizz(): WizzData | null {

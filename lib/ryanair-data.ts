@@ -170,9 +170,17 @@ function minDate(a: string, b: string): string {
 let cached: RyanairData | null = null;
 let loadState: "idle" | "loading" | "ready" | "error" = "idle";
 const listeners = new Set<() => void>();
+export type FareFileLoadState = "loading" | "ready" | "error";
+export type RyanairResource = { data: RyanairData | null; state: FareFileLoadState };
+let resource: RyanairResource = { data: null, state: "loading" };
+const serverResource: RyanairResource = { data: null, state: "loading" };
 
 function notifyListeners() {
   for (const notify of listeners) notify();
+}
+
+function syncResource() {
+  resource = { data: cached, state: loadState === "error" ? "error" : cached ? "ready" : "loading" };
 }
 
 export function subscribeRyanair(listener: () => void) {
@@ -180,6 +188,7 @@ export function subscribeRyanair(listener: () => void) {
   if (loadState === "idle" && typeof window !== "undefined") {
     const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
     loadState = "loading";
+    syncResource();
     void fetch(`${base}/${RYANAIR_FILE}`, { cache: "no-cache" })
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -194,6 +203,7 @@ export function subscribeRyanair(listener: () => void) {
         loadState = "error";
       })
       .finally(() => {
+        syncResource();
         notifyListeners();
       });
   }
@@ -209,5 +219,13 @@ export function getRyanairServerSnapshot(): RyanairData | null {
 }
 
 export function getRyanairLoadState(): "loading" | "ready" | "error" {
-  return loadState === "error" ? "error" : cached ? "ready" : "loading";
+  return resource.state;
+}
+
+export function getRyanairResourceSnapshot(): RyanairResource {
+  return resource;
+}
+
+export function getRyanairServerResourceSnapshot(): RyanairResource {
+  return serverResource;
 }

@@ -6,7 +6,7 @@ import type { DealRecommendation } from "@/lib/deals";
 import { formatDate, formatPln, formatTripDates } from "@/lib/format";
 import { lookupDestination } from "@/lib/network-refresh";
 
-export function BestDeals({ deals }: { deals: DealRecommendation[] }) {
+export function BestDeals({ deals, filtered = false }: { deals: DealRecommendation[]; filtered?: boolean }) {
   return (
     <section aria-labelledby="best-deals-heading" className="overflow-hidden rounded-xl border border-emerald-700/20 bg-emerald-500/5">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-emerald-700/15 px-4 py-4 sm:px-5">
@@ -21,7 +21,9 @@ export function BestDeals({ deals }: { deals: DealRecommendation[] }) {
       </div>
       {deals.length === 0 ? (
         <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">
-          Brak wyraźnych okazji w zapisanej historii. Dodaj co najmniej dwa odczyty ceny dla tej samej trasy i linii.
+          {filtered
+            ? "Żadna obserwowana trasa nie ma rekomendacji dla wybranej linii."
+            : "Brak wyraźnych okazji w zapisanej historii. Dodaj co najmniej dwa odczyty ceny dla tej samej trasy i linii."}
         </p>
       ) : (
         <ol className="divide-y divide-emerald-700/15">
