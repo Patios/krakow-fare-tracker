@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { CalendarDays, History, Pencil, PlaneLanding, PlaneTakeoff, RefreshCw, Trash2 } from "lucide-react";
+import { Calendar, CalendarDays, History, Pencil, PlaneLanding, PlaneTakeoff, RefreshCw, Trash2 } from "lucide-react";
 import { formatAutoFlights, noFareText, type DayFlights, type NoFare, type RyanairFare } from "@/lib/fare-refresh";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { FlightDayCheck } from "@/components/flight-day-check";
