@@ -251,9 +251,17 @@ async function insertRows(
   const db = getSupabase();
   if (!db) return failPersist("Brak konfiguracji Supabase.");
   if (routes.length > 0) {
-    let { error } = await db.from("fare_routes").insert(routes);
-    if (error && missingAutoRefreshColumn(error.message)) {
-      ({ error } = await db.from("fare_routes").insert(routes.map(({ auto_refresh: _auto, ...row }) => row)));
+    let payload = routes.map((route) => ({ ...route }));
+    let { error } = await db.from("fare_routes").insert(payload);
+    for (let attempt = 0; attempt < 2 && error && (missingAutoRefreshColumn(error.message) || missingSortColumn(error.message)); attempt += 1) {
+      const message = error.message;
+      payload = payload.map((route) => {
+        const next = { ...route };
+        if (missingAutoRefreshColumn(message)) delete next.auto_refresh;
+        if (missingSortColumn(message)) delete next.sort_index;
+        return next;
+      });
+      ({ error } = await db.from("fare_routes").insert(payload));
     }
     if (error) return failPersist(error.message);
   }
@@ -294,6 +302,10 @@ function missingAutoRefreshColumn(message: string) {
   return /auto_refresh/i.test(message);
 }
 
+function missingSortColumn(message: string) {
+  return /sort_index/i.test(message);
+}
+
 async function updateRoute(route: Parameters<typeof routeToRow>[0]): Promise<boolean> {
   const db = getSupabase();
   if (!db) return failPersist("Brak konfiguracji Supabase.");
@@ -301,8 +313,9 @@ async function updateRoute(route: Parameters<typeof routeToRow>[0]): Promise<boo
   void createdAt;
   const hadTimes = Boolean(fields.outbound_depart || fields.outbound_arrive || fields.return_depart || fields.return_arrive);
   let { data, error } = await db.from("fare_routes").update(fields).eq("id", id).select("id");
-  if (error && missingAutoRefreshColumn(error.message)) {
-    delete fields.auto_refresh;
+  for (let attempt = 0; attempt < 2 && error && (missingAutoRefreshColumn(error.message) || missingSortColumn(error.message)); attempt += 1) {
+    if (missingAutoRefreshColumn(error.message)) delete fields.auto_refresh;
+    if (missingSortColumn(error.message)) delete fields.sort_index;
     ({ data, error } = await db.from("fare_routes").update(fields).eq("id", id).select("id"));
   }
   if (error && missingTimeColumn(error.message)) {
@@ -365,9 +378,15 @@ async function pullStore(): Promise<{ ok: true; data: StoreData } | { ok: false;
   if (!db) return { ok: false, error: "Brak konfiguracji Supabase." };
   const routeColumns = "id, destination_iata, outbound_from, outbound_to, return_date, created_at";
   const timeColumns = `${routeColumns}, outbound_depart, outbound_arrive, return_depart, return_arrive`;
-  let routes = await db.from("fare_routes").select(`${timeColumns}, auto_refresh`);
+  let columns = `${timeColumns}, auto_refresh, sort_index`;
+  let routes = await db.from("fare_routes").select(columns);
+  if (routes.error && missingSortColumn(routes.error.message)) {
+    columns = columns.replace(", sort_index", "");
+    routes = await db.from("fare_routes").select(columns);
+  }
   if (routes.error && missingAutoRefreshColumn(routes.error.message)) {
-    routes = await db.from("fare_routes").select(timeColumns);
+    columns = columns.replace(", auto_refresh", "");
+    routes = await db.from("fare_routes").select(columns);
   }
   if (routes.error && missingTimeColumn(routes.error.message)) {
     routes = await db.from("fare_routes").select(routeColumns);

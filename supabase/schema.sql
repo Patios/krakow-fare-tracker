@@ -45,6 +45,9 @@ alter table public.fare_routes
   add column if not exists auto_refresh boolean not null default false;
 
 alter table public.fare_routes
+  add column if not exists sort_index integer;
+
+alter table public.fare_routes
   add column if not exists outbound_depart time,
   add column if not exists outbound_arrive time,
   add column if not exists return_depart time,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AIRLINE_LABEL, RYANAIR_IATA, WIZZ_IATA, airlinesFor, destinationByIata, destinations } from "./airports";
 import { flightClock, formatFlightDay, formatFlightTimes, parseAmount, parseTimeInput } from "./format";
-import { latestLogsByAirline, lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes, tripEnded } from "./routes";
+import { latestLogsByAirline, lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, reorderRoutes, sortRoutes, tripEnded } from "./routes";
 import { ryanairSearchUrl, wizzairSearchUrl } from "./search-urls";
 import { parseStore } from "./storage";
 import type { Airline, PriceLog, WatchedRoute } from "./types";
@@ -182,6 +182,26 @@ test("routes sort by the lowest logged price and flag a drop against the previou
     ).map((item) => item.id),
     ["empty", "cheap", "dear"],
   );
+  const custom = [
+    route({ id: "empty", destinationIata: "VCE", sortIndex: 2 }),
+    route({ id: "dear", destinationIata: "STN", sortIndex: 0 }),
+    route({ id: "cheap", destinationIata: "BGY", sortIndex: 1 }),
+    route({ id: "fresh", destinationIata: "BCN", createdAt: "2026-10-28T10:00:00.000Z" }),
+  ];
+  assert.deepEqual(
+    sortRoutes(custom, logs, "2026-10-29").map((item) => item.id),
+    ["fresh", "dear", "cheap", "empty"],
+  );
+  assert.deepEqual(
+    reorderRoutes(sortRoutes(routes, logs, "2026-10-29"), "empty", "cheap", "2026-10-29")?.map((item) => item.id),
+    ["empty", "cheap", "dear"],
+  );
+  const withFlown = sortRoutes(
+    [...routes, route({ id: "flown", destinationIata: "AGP", outboundFrom: "2026-10-20" })],
+    logs,
+    "2026-10-29",
+  );
+  assert.equal(reorderRoutes(withFlown, "cheap", "flown", "2026-10-29"), null);
 
   const cheapLogs = orderedLogs(logs, "cheap");
   assert.equal(cheapLogs[0]?.id, "c");

@@ -155,3 +155,23 @@ test("route hours round-trip only when the columns are present", () => {
   assert.equal(stored?.outboundDepart, "06:40");
   assert.equal(stored?.outboundArrive, null);
 });
+
+test("a saved route order round-trips and counts as an edit", () => {
+  const ordered = { ...route, sortIndex: 2 };
+  assert.equal(routeToRow(ordered).sort_index, 2);
+  assert.equal("sort_index" in routeToRow(route), false);
+  assert.equal(
+    routeFromRow({
+      id: route.id,
+      destination_iata: "BGY",
+      outbound_from: "2026-11-23",
+      outbound_to: null,
+      return_date: null,
+      created_at: route.createdAt,
+      sort_index: 2,
+    })?.sortIndex,
+    2,
+  );
+  const changes = cloudChanges({ routes: [route], logs: [] }, { routes: [ordered], logs: [] });
+  assert.deepEqual(changes.updatedRoutes, [ordered]);
+});

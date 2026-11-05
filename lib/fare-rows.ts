@@ -13,6 +13,7 @@ export type FareRouteInsert = {
   return_depart?: string | null;
   return_arrive?: string | null;
   auto_refresh?: boolean;
+  sort_index?: number;
 };
 
 export type FarePriceInsert = {
@@ -50,6 +51,7 @@ export function routeToRow(route: WatchedRoute): FareRouteInsert {
     row.return_arrive = route.returnArrive ?? null;
   }
   if (Object.prototype.hasOwnProperty.call(route, "autoRefresh")) row.auto_refresh = route.autoRefresh === true;
+  if (Number.isInteger(route.sortIndex) && (route.sortIndex as number) >= 0) row.sort_index = route.sortIndex;
   return row;
 }
 
@@ -96,6 +98,8 @@ export function routeFromRow(value: unknown): WatchedRoute | null {
     createdAt: row.created_at,
   };
   if (row.auto_refresh === true) route.autoRefresh = true;
+  const sortIndex = readSortIndex(row.sort_index);
+  if (sortIndex != null) route.sortIndex = sortIndex;
   const timeColumns = ["outbound_depart", "outbound_arrive", "return_depart", "return_arrive"] as const;
   if (!timeColumns.some((key) => Object.prototype.hasOwnProperty.call(row, key))) return route;
   const outboundDepart = readTime(row.outbound_depart);
@@ -221,7 +225,8 @@ function routeChanged(previous: WatchedRoute, next: WatchedRoute) {
     previous.outboundFrom !== next.outboundFrom ||
     (previous.outboundTo ?? null) !== (next.outboundTo ?? null) ||
     (previous.returnDate ?? null) !== (next.returnDate ?? null) ||
-    (previous.autoRefresh === true) !== (next.autoRefresh === true)
+    (previous.autoRefresh === true) !== (next.autoRefresh === true) ||
+    (previous.sortIndex ?? null) !== (next.sortIndex ?? null)
   ) {
     return true;
   }
@@ -236,6 +241,12 @@ function dateOnly(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const date = value.slice(0, 10);
   return isIsoDate(date) ? date : null;
+}
+
+function readSortIndex(value: unknown): number | null {
+  const index = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isInteger(index) || index < 0) return null;
+  return index;
 }
 
 function readAmount(value: unknown): number | null {

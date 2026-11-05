@@ -59,7 +59,7 @@ import {
   liveRyanairFare,
   subscribeRyanair,
 } from "@/lib/ryanair-data";
-import { lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, sortRoutes } from "@/lib/routes";
+import { lowestLoggedPrice, matchesRouteFilter, orderedLogs, priceDrop, reorderRoutes, sortRoutes, tripEnded } from "@/lib/routes";
 import {
   clearStore,
   getServerSnapshot,
@@ -142,6 +142,8 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
   const [refreshing, setRefreshing] = useState<ReadonlySet<string>>(new Set());
   const [refreshNotes, setRefreshNotes] = useState<Record<string, string>>({});
   const [refreshSummary, setRefreshSummary] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const ready = view.status === "ready" ? view.data : null;
   const sorted = ready ? sortRoutes(ready.routes, ready.logs, todayIso()) : [];
@@ -224,6 +226,14 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
     document.getElementById(`route-${freshRouteId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     setFreshRouteId(null);
   }, [freshRouteId, sorted]);
+
+  function moveRoute(fromId: string, toId: string) {
+    if (!ready || fromId === toId) return;
+    const today = todayIso();
+    const next = reorderRoutes(sorted, fromId, toId, today);
+    if (!next) return;
+    commit({ routes: next, logs: ready.logs });
+  }
 
   function commit(next: StoreData) {
     if (!ready) return false;
@@ -539,7 +549,7 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                     {drops > 0 ? ` · ${drops} ${drops === 1 ? "obniżka" : "obniżki"}` : ""}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Na górze najnowsza trasa, dalej od najniższej ceny.
+                    Ułóż trasy uchwytem po lewej. Nowa trasa wskakuje na początek, a minione zostają na dole.
                     {autoCount > 0
                       ? ` Automatycznie odświeżane: ${autoCount} ${routeWord(autoCount)}, gdy strona jest otwarta.`
                       : ""}
@@ -587,6 +597,36 @@ export function FareBoard({ initialDestinationIata }: { initialDestinationIata?:
                   id={`route-${route.id}`}
                   key={route.id}
                   route={route}
+                  dragging={draggingId === route.id}
+                  dragOver={dragOverId === route.id && draggingId !== route.id}
+                  onDragRouteStart={
+                    filtered.length > 1
+                      ? (event) => {
+                          event.dataTransfer.setData("text/plain", route.id);
+                          event.dataTransfer.effectAllowed = "move";
+                          setDraggingId(route.id);
+                        }
+                      : undefined
+                  }
+                  onDragRouteEnd={() => {
+                    setDraggingId(null);
+                    setDragOverId(null);
+                  }}
+                  onDragRouteOver={(event) => {
+                    const source = ready?.routes.find((item) => item.id === draggingId);
+                    if (!source || source.id === route.id) return;
+                    if (tripEnded(source, todayIso()) !== tripEnded(route, todayIso())) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    setDragOverId(route.id);
+                  }}
+                  onDropRoute={(event) => {
+                    event.preventDefault();
+                    const fromId = event.dataTransfer.getData("text/plain") || draggingId;
+                    if (fromId) moveRoute(fromId, route.id);
+                    setDraggingId(null);
+                    setDragOverId(null);
+                  }}
                   logs={ready.logs}
                   onLogPrice={() => {
                     setLogKey((value) => value + 1);

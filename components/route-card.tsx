@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { CalendarDays, History, Pencil, PlaneLanding, PlaneTakeoff, RefreshCw, Trash2 } from "lucide-react";
+import { useState, type DragEvent, type ReactNode } from "react";
+import { CalendarDays, GripVertical, History, Pencil, PlaneLanding, PlaneTakeoff, RefreshCw, Trash2 } from "lucide-react";
 import { formatAutoFlights, noFareText, type DayFlights, type NoFare, type RyanairFare } from "@/lib/fare-refresh";
 import { AirlineChip, AirlineMark } from "@/components/airline-mark";
 import { FlightDayCheck } from "@/components/flight-day-check";
@@ -28,6 +28,12 @@ export function RouteCard({
   onCheck,
   onDeleteRoute,
   onDeleteLog,
+  dragging = false,
+  dragOver = false,
+  onDragRouteStart,
+  onDragRouteEnd,
+  onDragRouteOver,
+  onDropRoute,
   refreshing,
   refreshNote,
   noFare,
@@ -63,6 +69,12 @@ export function RouteCard({
   onCheck: (check: { airline: Airline; href: string; blocked: boolean }) => void;
   onDeleteRoute: () => void;
   onDeleteLog: (logId: string) => void;
+  dragging?: boolean;
+  dragOver?: boolean;
+  onDragRouteStart?: (event: DragEvent<HTMLElement>) => void;
+  onDragRouteEnd?: () => void;
+  onDragRouteOver?: (event: DragEvent<HTMLElement>) => void;
+  onDropRoute?: (event: DragEvent<HTMLElement>) => void;
 }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pendingLogId, setPendingLogId] = useState<string | null>(null);
@@ -135,11 +147,36 @@ export function RouteCard({
   if (rangeNote && !ended) notices.push({ key: "range", tone: "info", text: rangeNote });
 
   return (
-    <Card id={id} className={cn("scroll-mt-4 gap-0 pt-0 pb-0", visibleDrop && !ended && "ring-emerald-700/30")}>
+    <Card
+      id={id}
+      onDragOver={onDragRouteOver}
+      onDrop={onDropRoute}
+      className={cn(
+        "scroll-mt-4 gap-0 pt-0 pb-0",
+        visibleDrop && !ended && "ring-emerald-700/30",
+        dragging && "opacity-60",
+        dragOver && "ring-2 ring-primary",
+      )}
+    >
       <div aria-hidden className={cn("h-1.5 w-full", ended ? "bg-border" : airlineStripe(destination?.airlines))} />
       <CardHeader className={cn("pt-4 pb-3", ended && "opacity-60")}>
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-          <div className="min-w-0">
+          <div className="flex min-w-0 gap-2">
+            {onDragRouteStart ? (
+              <div
+                role="button"
+                tabIndex={0}
+                draggable
+                aria-label="Przeciągnij, aby zmienić kolejność"
+                title="Przeciągnij, aby zmienić kolejność"
+                onDragStart={onDragRouteStart}
+                onDragEnd={onDragRouteEnd}
+                className="mt-0.5 cursor-grab text-muted-foreground active:cursor-grabbing"
+              >
+                <GripVertical className="size-4" />
+              </div>
+            ) : null}
+            <div className="min-w-0">
             <p className="flex flex-wrap items-center gap-2 font-heading text-xs font-semibold tracking-[0.16em] text-brand-ink uppercase">
               KRK → {route.destinationIata}
               {ended ? (
@@ -156,6 +193,7 @@ export function RouteCard({
                 {destination ? `${destination.airport} · ${destination.country}` : "Tego lotniska nie ma w zimowym rozkładzie."}
               </span>
               {destination?.airlines.map((airline) => <AirlineChip key={airline} airline={airline} />)}
+            </div>
             </div>
           </div>
           {airlineOffers ? null : !publishedRyanair && !latest && wizzEstimate ? (

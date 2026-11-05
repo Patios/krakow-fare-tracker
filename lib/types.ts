@@ -21,6 +21,8 @@ export type WatchedRoute = {
   returnArrive?: string | null;
   /** Ryanair price is fetched on a timer while the page is open. */
   autoRefresh?: boolean;
+  /** Manual position. Missing means the route still follows the automatic price order. */
+  sortIndex?: number;
 };
 
 export type FlightTimes = {

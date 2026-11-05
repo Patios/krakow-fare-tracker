@@ -57,8 +57,34 @@ export function lastOutboundDay(route: WatchedRoute): string {
 
 /** Upcoming trips first, ended ones at the end in the same order. */
 export function sortRoutes(routes: WatchedRoute[], logs: PriceLog[], today: string): WatchedRoute[] {
-  const sorted = sortByPrice(routes, logs);
+  const custom = routes.some((route) => route.sortIndex != null);
+  const sorted = custom ? sortByCustomOrder(routes) : sortByPrice(routes, logs);
   return [...sorted.filter((route) => !tripEnded(route, today)), ...sorted.filter((route) => tripEnded(route, today))];
+}
+
+/**
+ * Moves one route onto another inside the same group and stamps that order.
+ * Upcoming and ended trips stay in their own groups.
+ */
+export function reorderRoutes(sorted: WatchedRoute[], fromId: string, toId: string, today: string): WatchedRoute[] | null {
+  const from = sorted.findIndex((route) => route.id === fromId);
+  const to = sorted.findIndex((route) => route.id === toId);
+  if (from < 0 || to < 0 || from === to) return null;
+  if (tripEnded(sorted[from], today) !== tripEnded(sorted[to], today)) return null;
+  const next = [...sorted];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next.map((route, index) => ({ ...route, sortIndex: index }));
+}
+
+function sortByCustomOrder(routes: WatchedRoute[]): WatchedRoute[] {
+  const fresh = routes
+    .filter((route) => route.sortIndex == null)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : a.id.localeCompare(b.id)));
+  const placed = routes
+    .filter((route) => route.sortIndex != null)
+    .sort((a, b) => a.sortIndex! - b.sortIndex! || a.id.localeCompare(b.id));
+  return [...fresh, ...placed];
 }
 
 function sortByPrice(routes: WatchedRoute[], logs: PriceLog[]): WatchedRoute[] {
