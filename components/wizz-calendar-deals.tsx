@@ -1,16 +1,16 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { ChevronDown, PlaneTakeoff, Sparkles } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useDealSectionExpanded } from "@/lib/deals-sections";
 import { formatDate, formatPln } from "@/lib/format";
 import type { WizzCalendarDeal, WizzData } from "@/lib/wizz-data";
 
 export function WizzCalendarDeals({ deals, data, state }: { deals: WizzCalendarDeal[]; data: WizzData | null; state: "loading" | "ready" | "error" }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, toggleExpanded] = useDealSectionExpanded("wizzair");
   return (
     <section aria-labelledby="wizz-calendar-deals-heading" className="overflow-hidden rounded-xl border border-wizz/30 bg-wizz/5">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-wizz/20 px-4 py-4 sm:px-5">
@@ -22,7 +22,7 @@ export function WizzCalendarDeals({ deals, data, state }: { deals: WizzCalendarD
         </div>
         <div className="flex items-center gap-2">
           {data ? <Badge variant="outline">{deals.length} kierunków</Badge> : null}
-          <Button type="button" variant="outline" size="sm" aria-expanded={expanded} aria-controls="wizz-calendar-deals-list" onClick={() => setExpanded((value) => !value)}>
+          <Button type="button" variant="outline" size="sm" aria-expanded={expanded} aria-controls="wizz-calendar-deals-list" onClick={toggleExpanded}>
             <ChevronDown className={expanded ? "rotate-180" : undefined} /> {expanded ? "Zwiń" : "Rozwiń"}
           </Button>
         </div>

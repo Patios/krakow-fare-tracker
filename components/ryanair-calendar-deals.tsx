@@ -1,16 +1,16 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { ChevronDown, PlaneTakeoff, Sparkles } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useDealSectionExpanded } from "@/lib/deals-sections";
 import { formatDate, formatPln } from "@/lib/format";
 import type { RyanairCalendarDeal, RyanairData } from "@/lib/ryanair-data";
 
 export function RyanairCalendarDeals({ deals, data, state }: { deals: RyanairCalendarDeal[]; data: RyanairData | null; state: "loading" | "ready" | "error" }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, toggleExpanded] = useDealSectionExpanded("ryanair");
   return (
     <section aria-labelledby="ryanair-calendar-deals-heading" className="overflow-hidden rounded-xl border border-ryanair-yellow/60 bg-ryanair-yellow/10">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ryanair-yellow/40 px-4 py-4 sm:px-5">
@@ -22,7 +22,7 @@ export function RyanairCalendarDeals({ deals, data, state }: { deals: RyanairCal
         </div>
         <div className="flex items-center gap-2">
           {data ? <Badge variant="outline">{deals.length} kierunków · do {formatDate(data.through)}</Badge> : null}
-          <Button type="button" variant="outline" size="sm" aria-expanded={expanded} aria-controls="ryanair-calendar-deals-list" onClick={() => setExpanded((value) => !value)}>
+          <Button type="button" variant="outline" size="sm" aria-expanded={expanded} aria-controls="ryanair-calendar-deals-list" onClick={toggleExpanded}>
             <ChevronDown className={expanded ? "rotate-180" : undefined} /> {expanded ? "Zwiń" : "Rozwiń"}
           </Button>
         </div>

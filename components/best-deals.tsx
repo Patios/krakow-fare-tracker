@@ -1,17 +1,17 @@
 "use client";
 
-import { useState } from "react";
 import { ChevronDown, Sparkles } from "lucide-react";
 import { AirlineMark } from "@/components/airline-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AIRLINE_LABEL } from "@/lib/airports";
 import type { DealRecommendation } from "@/lib/deals";
+import { useDealSectionExpanded } from "@/lib/deals-sections";
 import { formatDate, formatPln, formatTripDates } from "@/lib/format";
 import { lookupDestination } from "@/lib/network-refresh";
 
 export function BestDeals({ deals, filtered = false }: { deals: DealRecommendation[]; filtered?: boolean }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, toggleExpanded] = useDealSectionExpanded("watched");
   return (
     <section aria-labelledby="best-deals-heading" className="overflow-hidden rounded-xl border border-emerald-700/20 bg-emerald-500/5">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-emerald-700/15 px-4 py-4 sm:px-5">
@@ -24,7 +24,7 @@ export function BestDeals({ deals, filtered = false }: { deals: DealRecommendati
         </div>
         <div className="flex items-center gap-2">
           {deals.length > 0 ? <Badge className="bg-emerald-800 text-white">{deals.length} {dealWord(deals.length)}</Badge> : null}
-          <Button type="button" variant="outline" size="sm" aria-expanded={expanded} aria-controls="watched-deals-list" onClick={() => setExpanded((value) => !value)}>
+          <Button type="button" variant="outline" size="sm" aria-expanded={expanded} aria-controls="watched-deals-list" onClick={toggleExpanded}>
             <ChevronDown className={expanded ? "rotate-180" : undefined} /> {expanded ? "Zwiń" : "Rozwiń"}
           </Button>
         </div>

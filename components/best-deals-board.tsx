@@ -135,9 +135,9 @@ export function BestDealsBoard() {
             );
           })}
         </section>
+        {ready && ready.routes.length > 0 ? <BestDeals deals={filteredDeals} filtered={airlines.length < 2} /> : null}
         {airlines.includes("ryanair") ? <RyanairCalendarDeals deals={calendarDeals} data={ryanair} state={ryanairResource.state} /> : null}
         {airlines.includes("wizzair") ? <WizzCalendarDeals deals={wizzDeals} data={wizz} state={wizzResource.state} /> : null}
-        {ready && ready.routes.length > 0 ? <BestDeals deals={filteredDeals} filtered={airlines.length < 2} /> : null}
       </main>
     </div>
   );
